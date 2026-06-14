@@ -54,7 +54,14 @@ public slots:
     void InvokeAction(uint id, const QString &action_key) { emit ActionInvoked(id, action_key); }
     void CloseNotification(uint id) { emit NotificationClosed(id, 3); }
     QStringList GetCapabilities() { return {"body", "actions"}; }
-    QVariantList GetServerInformation() { return QVariantList() << "luminate-notify" << "meismeric" << "1.0" << "1.2"; }
+    
+    // THE FIX: Provide exact FDO D-Bus specification types (4 independent strings instead of a variant array)
+    QString GetServerInformation(QString &vendor, QString &version, QString &spec_version) {
+        vendor = "meismeric";
+        version = "1.0";
+        spec_version = "1.2";
+        return "luminate-notify";
+    }
     
     void SetDND(bool active) { if(m_dnd != active) { m_dnd = active; saveDnd(); emit DNDStateChanged(m_dnd); } }
     void ToggleDND() { m_dnd = !m_dnd; saveDnd(); emit DNDStateChanged(m_dnd); }

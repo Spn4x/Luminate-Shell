@@ -30,16 +30,8 @@ Item {
             visible: opacity > 0
             anchors.verticalCenter: parent.verticalCenter
             
-            Behavior on width { 
-                NumberAnimation { 
-                    duration: 250
-                    easing.type: Easing.OutCubic 
-                } 
-            }
-            
-            Behavior on opacity { 
-                NumberAnimation { duration: 200 } 
-            }
+            Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 200 } }
             
             Text { 
                 anchors.centerIn: parent
@@ -52,68 +44,49 @@ Item {
             MouseArea { 
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    statusBarRoot.portalClicked();
-                }
+                onClicked: statusBarRoot.portalClicked();
             }
         }
 
-        ClockModule { 
-            anchors.verticalCenter: parent.verticalCenter 
-        }
+        ClockModule { anchors.verticalCenter: parent.verticalCenter }
         
         SystrayModule { 
             anchors.verticalCenter: parent.verticalCenter
             activeMenuBusName: statusBarRoot.activeTrayBusName
-            
-            onCloseDropdownRequested: {
-                statusBarRoot.closeDropdownRequested();
-            }
-            
-            onTrayMenuRequested: (busName, menuPath, x, y) => {
-                statusBarRoot.trayMenuRequested(busName, menuPath, x, y);
-            }
+            onCloseDropdownRequested: statusBarRoot.closeDropdownRequested();
+            onTrayMenuRequested: (busName, menuPath, x, y) => { statusBarRoot.trayMenuRequested(busName, menuPath, x, y); }
         }
         
-        SysinfoModule { 
-            anchors.verticalCenter: parent.verticalCenter 
-        }
+        SysinfoModule { anchors.verticalCenter: parent.verticalCenter }
         
         AudioModule { 
             anchors.verticalCenter: parent.verticalCenter
-            
-            onAudioMenuRequested: (type, targetItem, items) => {
-                statusBarRoot.audioMenuRequested(type, targetItem, items);
-            }
+            onAudioMenuRequested: (type, targetItem, items) => { statusBarRoot.audioMenuRequested(type, targetItem, items); }
         }
         
         Rectangle {
             width: 24
             height: 24
             radius: 12
-            color: AppTheme.moduleBg
-            border.color: isPinned ? AppTheme.accent : "transparent"
-            border.width: 1
+            
+            color: isPinned ? AppTheme.accent : AppTheme.moduleBg
+            border.width: 0 
             anchors.verticalCenter: parent.verticalCenter
             
-            Behavior on border.color { 
-                ColorAnimation { duration: 200 } 
-            }
+            Behavior on color { ColorAnimation { duration: 200 } }
             
             Text { 
                 anchors.centerIn: parent
                 text: ""
                 font.family: AppTheme.iconFont
-                color: AppTheme.fg
+                color: isPinned ? AppTheme.bg : AppTheme.fg
                 font.pixelSize: 13 
             }
             
             MouseArea { 
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    statusBarRoot.settingsClicked(parent);
-                }
+                onClicked: statusBarRoot.settingsClicked(parent);
             }
         }
     }
