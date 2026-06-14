@@ -1,3 +1,9 @@
-build
-.cache
 project_dump.txt
+build/
+.cache/
+*.db
+*.db-journal
+*.db-wal
+*.moc
+*.o
+.ninja_*

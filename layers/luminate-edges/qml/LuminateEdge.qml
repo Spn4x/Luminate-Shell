@@ -199,13 +199,16 @@ Item {
         border.width: activeState === "passive" ? 0 : 2 
         clip: true 
 
+        // THE FIX: Removed the activeState restriction.
+        // This patch paints over the bottom border with the background color 
+        // to make the bar sit perfectly flush against the bottom of the screen in ALL states.
         Rectangle {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             height: parent.border.width
             color: parent.color 
-            visible: parent.border.width > 0 && activeState !== "expanded"
+            visible: parent.border.width > 0 
             z: 10 
         }
 
@@ -391,6 +394,9 @@ Item {
             EdgeHelper { id: edgeHelper }
             Player { id: mediaComponent; anchors.fill: parent; isExpanded: true; visible: Backend.displayMode === "media" }
             ScreenshotEditor { id: qscreenEditor; anchors.fill: parent; visible: Backend.displayMode === "screenshot_edit" }
+            
+            // THE FIX (Part 2): Made sure the launcher module is visually detached slightly 
+            // from the bottom border using anchors.margins: 5 so it floats cleanly inside the panel.
             LauncherUI { id: launcherModule; anchors.fill: parent; anchors.margins: 5; visible: Backend.displayMode === "launcher" }
         }
     }
