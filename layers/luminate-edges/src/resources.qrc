@@ -1,0 +1,24 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file alias="qml/Main.qml">../qml/Main.qml</file>
+        <file alias="qml/LuminateEdge.qml">../qml/LuminateEdge.qml</file>
+        <file alias="qml/EdgeHelper.qml">../qml/EdgeHelper.qml</file>
+        <file alias="qml/EdgeSensor.qml">../qml/EdgeSensor.qml</file>
+        <file alias="qml/PulltabMenu.qml">../qml/PulltabMenu.qml</file>
+        <file alias="qml/StatusBar.qml">../qml/StatusBar.qml</file>
+        <file alias="qml/Player.qml">../qml/Player.qml</file>
+        <file alias="qml/AppTheme.qml">../qml/AppTheme.qml</file>
+        <file alias="qml/ScreenshotEditor.qml">../qml/ScreenshotEditor.qml</file>
+        <file alias="qml/LauncherUI.qml">../qml/LauncherUI.qml</file>
+        
+        <!-- Renamed to prevent C++ Singleton Collisions -->
+        <file alias="qml/ClockModule.qml">../qml/ClockModule.qml</file>
+        <file alias="qml/SysinfoModule.qml">../qml/SysinfoModule.qml</file>
+        <file alias="qml/AudioModule.qml">../qml/AudioModule.qml</file>
+        <file alias="qml/SystrayModule.qml">../qml/SystrayModule.qml</file>
+        
+        <file alias="qml/SystrayMenuNode.qml">../qml/SystrayMenuNode.qml</file>
+        <file alias="qml/qmldir">../qml/qmldir</file>
+    </qresource>
+</RCC>

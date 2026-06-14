@@ -1,0 +1,17 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/">
+    <file>ui/Main.qml</file>
+    <file>ui/AppTheme.qml</file>
+    <file>ui/modules/WallpaperChooser.qml</file>
+    <file>ui/modules/GridOverlay.qml</file>
+    <file>ui/modules/WidgetDrawer.qml</file>
+    <file>ui/modules/InteractiveWidget.qml</file>
+    <file>ui/scenes/ClockScene.qml</file>
+    <file>ui/scenes/ClockConfigPanel.qml</file>
+    <file>ui/scenes/TextScene.qml</file>
+    <file>ui/scenes/SystemScene.qml</file>
+    <file>ui/scenes/MediaScene.qml</file>
+    <file>ui/scenes/LockScreen.qml</file>
+    <file>ui/scenes/AuthScene.qml</file>
+</qresource>
+</RCC>

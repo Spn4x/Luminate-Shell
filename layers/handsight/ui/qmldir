@@ -1,0 +1,4 @@
+module Luminate.Shell
+DynamicIsland 1.0 DynamicIsland.qml
+Player 1.0 Player.qml
+AppTheme 1.0 AppTheme.qml
