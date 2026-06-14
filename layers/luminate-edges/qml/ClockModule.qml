@@ -16,11 +16,10 @@ Item {
         Item {
             x: 0; y: 0; height: parent.height
             width: (parent.width / 2) * Topbar.timeProgress
-            clip: true // Chops off the right edge cleanly
+            clip: true 
             
             Rectangle {
                 x: 0; y: 0; height: parent.height
-                // Make it intentionally wider so the rounded right edge is hidden outside the clip
                 width: (containerRect.width / 2) + AppTheme.moduleRadius
                 color: AppTheme.accent
                 radius: AppTheme.moduleRadius
@@ -31,13 +30,12 @@ Item {
         Item {
             x: containerRect.width - width; y: 0; height: parent.height
             width: (containerRect.width / 2) * Topbar.monthProgress
-            clip: true // Chops off the left edge cleanly
+            clip: true 
             
             Rectangle {
-                // Push it left so the rounded left edge is hidden outside the clip
                 x: -AppTheme.moduleRadius; y: 0; height: parent.height
                 width: (containerRect.width / 2) + AppTheme.moduleRadius
-                color: Qt.rgba(AppTheme.accent.r, AppTheme.accent.g, AppTheme.accent.b, 0.6)
+                color: AppTheme.accentDark1 // Solid, dark accent!
                 radius: AppTheme.moduleRadius
             }
         }

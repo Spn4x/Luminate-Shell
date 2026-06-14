@@ -3,6 +3,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 #include <QDBusConnection>
+#include <QTimer>
 
 class AudioBackend : public QObject {
     Q_OBJECT
@@ -49,6 +50,7 @@ private slots:
     void refreshActivePlayer();
     void refreshMprisState();
     void onDbusPropertiesChanged(const QString &interface, const QVariantMap &changedProps, const QStringList &invalidatedProps);
+    void pollStates();
 
 private:
     void setActivePlayer(const QString &busName);
@@ -67,4 +69,5 @@ private:
     bool m_btPowered = true;
 
     QString m_activePlayerBus = "";
+    QTimer *m_pollTimer;
 };

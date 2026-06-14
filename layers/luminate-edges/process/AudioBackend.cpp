@@ -15,7 +15,6 @@ Q_DECLARE_METATYPE(DBusInterfaceMap)
 typedef QMap<QDBusObjectPath, DBusInterfaceMap> DBusObjectMap;
 Q_DECLARE_METATYPE(DBusObjectMap)
 
-// Safe, warning-free static helper to extract string paths out of any D-Bus/Qt metadata type
 static QString getMprisString(const QVariant &var) {
     if (var.userType() == qMetaTypeId<QDBusVariant>()) {
         return getMprisString(var.value<QDBusVariant>().variant());
@@ -56,6 +55,15 @@ AudioBackend::AudioBackend(QObject *parent) : QObject(parent) {
         "org.freedesktop.DBus.Properties", "PropertiesChanged",
         this, SLOT(onDbusPropertiesChanged(QString, QVariantMap, QStringList)));
 
+    // 3. Failsafe Polling (Fixes the Boot Race Condition)
+    m_pollTimer = new QTimer(this);
+    connect(m_pollTimer, &QTimer::timeout, this, &AudioBackend::pollStates);
+    m_pollTimer->start(3000);
+
+    pollStates();
+}
+
+void AudioBackend::pollStates() {
     refreshBluezState();
     refreshActivePlayer();
 }

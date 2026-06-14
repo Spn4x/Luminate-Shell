@@ -10,6 +10,11 @@ QtObject {
     property color accent: theme["accent"] !== undefined ? theme["accent"] : "#00ffcc"
     property color surface: theme["surface"] !== undefined ? theme["surface"] : "#3E3E41"
     
+    // THE FIX: Solid, darker variants of the accent color for stacking (no opacity/alpha used!)
+    property color accentDark1: Qt.darker(accent, 1.25)
+    property color accentDark2: Qt.darker(accent, 1.5)
+    property color accentDark3: Qt.darker(accent, 1.8)
+
     property color surfaceAlpha: Qt.rgba(surface.r, surface.g, surface.b, 0.5)
     property color borderAlpha: Qt.rgba(accent.r, accent.g, accent.b, 0.4)
     property color accentAlpha15: Qt.rgba(accent.r, accent.g, accent.b, 0.15)
@@ -32,7 +37,6 @@ QtObject {
     property string iconFont: "JetBrainsMono Nerd Font" 
     property int fontSize: 12            
 
-    // Halved/Compact Dimensions
     property int barHeight: 32           
     property int barRadius: 16           
     property int moduleRadius: 8         

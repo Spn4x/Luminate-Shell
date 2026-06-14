@@ -11,10 +11,11 @@ Item {
         radius: AppTheme.moduleRadius
         clip: true
 
-        Rectangle { x: 0; y: 0; height: parent.height; width: parent.width * Topbar.cpuPct; color: Qt.rgba(AppTheme.accent.r, AppTheme.accent.g, AppTheme.accent.b, 0.2); radius: AppTheme.moduleRadius; Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } } }
-        Rectangle { x: 0; height: parent.height * 0.75; anchors.verticalCenter: parent.verticalCenter; width: parent.width * Topbar.ramPct; color: Qt.rgba(AppTheme.accent.r, AppTheme.accent.g, AppTheme.accent.b, 0.4); radius: AppTheme.moduleRadius; Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } } }
-        Rectangle { x: 0; height: parent.height * 0.50; anchors.verticalCenter: parent.verticalCenter; width: parent.width * Topbar.tempPct; color: Qt.rgba(AppTheme.accent.r, AppTheme.accent.g, AppTheme.accent.b, 0.6); radius: AppTheme.moduleRadius; Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } } }
-        Rectangle { x: 0; height: parent.height * 0.25; anchors.verticalCenter: parent.verticalCenter; width: parent.width * Topbar.batPct; color: Qt.rgba(AppTheme.accent.r, AppTheme.accent.g, AppTheme.accent.b, 0.9); radius: AppTheme.moduleRadius; Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } } }
+        // Clean, solid, mathematically darkened layers
+        Rectangle { x: 0; y: 0; height: parent.height; width: parent.width * Topbar.cpuPct; color: AppTheme.accentDark3; radius: AppTheme.moduleRadius; Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } } }
+        Rectangle { x: 0; height: parent.height * 0.75; anchors.verticalCenter: parent.verticalCenter; width: parent.width * Topbar.ramPct; color: AppTheme.accentDark2; radius: AppTheme.moduleRadius; Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } } }
+        Rectangle { x: 0; height: parent.height * 0.50; anchors.verticalCenter: parent.verticalCenter; width: parent.width * Topbar.tempPct; color: AppTheme.accentDark1; radius: AppTheme.moduleRadius; Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } } }
+        Rectangle { x: 0; height: parent.height * 0.25; anchors.verticalCenter: parent.verticalCenter; width: parent.width * Topbar.batPct; color: AppTheme.accent; radius: AppTheme.moduleRadius; Behavior on width { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } } }
 
         Item {
             anchors.fill: parent

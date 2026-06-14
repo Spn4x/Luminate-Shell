@@ -45,8 +45,6 @@ WallpaperBackend::WallpaperBackend(QObject *parent)
     , m_isLocked(false), m_selectedWidgetIndex(-1), m_cpuPrevTotal(0), m_cpuPrevIdle(0), m_cpuUsage(0.0)
     , m_ramUsage(0.0), m_systemTemp(0.0), m_mediaTitle(""), m_mediaArtist(""), m_mediaArt(""), m_mediaPlaybackStatus("Stopped")
 {
-    // THE FIX: Use a 0-millisecond singleShot timer to safely delay execution until the event loop starts.
-    // This allows main.cpp to finish registering this object on the DBus before the theme is broadcast.
     QTimer::singleShot(0, this, &WallpaperBackend::loadWallpapers);
 
     m_pollTimer = new QTimer(this);
@@ -151,10 +149,8 @@ void WallpaperBackend::updatePalette() {
     QColor acc(cMap.value("color4", "#00ffcc"));
     QColor surf = bg.lighter(130);
 
-    double lum = (0.299 * bg.red() + 0.587 * bg.green() + 0.114 * bg.blue());
-    QColor smartAcc = (lum < 128.0) 
-        ? QColor(std::clamp((int)(acc.red()*.6 + 255*.4),0,255), std::clamp((int)(acc.green()*.6 + 255*.4),0,255), std::clamp((int)(acc.blue()*.6 + 255*.4),0,255))
-        : QColor(std::clamp((int)(acc.red()*.7),0,255), std::clamp((int)(acc.green()*.7),0,255), std::clamp((int)(acc.blue()*.7),0,255));
+    // Provide a crisp, bright base accent without muddying it
+    QColor smartAcc = acc.lighter(115);
 
     QVariantMap newTheme;
     newTheme["bg"] = bg.name();

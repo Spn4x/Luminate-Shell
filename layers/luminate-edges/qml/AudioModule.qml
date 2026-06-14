@@ -8,7 +8,8 @@ import Luminate.Shell
 Item {
     id: root
     
-    property bool hasMedia: AudioBackend.mediaTitle !== "" && AudioBackend.mediaTitle !== "Unknown"
+    // THE FIX: Use Backend (NotificationBackend) for bulletproof media tracking
+    property bool hasMedia: Backend.mediaTitle !== "" && Backend.mediaTitle !== "Unknown"
     property bool isActive: AudioBackend.btConnected || hasMedia
 
     implicitWidth: isActive ? 200 : 0
@@ -51,13 +52,11 @@ Item {
     }
 
     function updateMediaInfo() {
-        var rawUrl = AudioBackend.mediaArtUrl;
-        var currentTitle = AudioBackend.mediaTitle;
+        // THE FIX: Direct path string provided by NotificationBackend
+        var rawUrl = Backend.mediaArt;
+        var currentTitle = Backend.mediaTitle;
 
         if (rawUrl !== "") {
-            if (rawUrl.startsWith("/")) {
-                rawUrl = "file://" + rawUrl;
-            }
             if (rawUrl !== activeArtUrl) {
                 activeArtUrl = rawUrl;
             }
@@ -87,7 +86,7 @@ Item {
     }
 
     Connections {
-        target: AudioBackend
+        target: Backend
         function onMediaChanged() { 
             updateMediaInfo(); 
         }
@@ -263,16 +262,16 @@ Item {
                 Timer { 
                     id: waveTimer
                     interval: 500
-                    running: AudioBackend.isPlaying && waveformRow.opacity > 0.01
+                    running: Backend.mediaStatus === "Playing" && waveformRow.opacity > 0.01
                     repeat: true
                     onTriggered: waveformRow.updateAllBars() 
                 }
                 
                 Connections { 
-                    target: AudioBackend
-                    function onIsPlayingChanged() { 
+                    target: Backend
+                    function onMediaChanged() { 
                         waveformRow.updateAllBars(); 
-                        if (AudioBackend.isPlaying) {
+                        if (Backend.mediaStatus === "Playing") {
                             waveTimer.restart(); 
                         } else {
                             waveTimer.stop();
@@ -299,7 +298,7 @@ Item {
                         }
                         
                         function updateTarget() { 
-                            if (!AudioBackend.isPlaying) { 
+                            if (Backend.mediaStatus !== "Playing") { 
                                 height = 4; 
                                 return; 
                             } 
@@ -319,7 +318,7 @@ Item {
                 anchors.centerIn: parent
                 width: parent.width - 20
                 horizontalAlignment: Text.AlignHCenter
-                text: AudioBackend.mediaTitle !== "" ? AudioBackend.mediaArtist + " - " + AudioBackend.mediaTitle : "No Media Playing"
+                text: Backend.mediaTitle !== "" ? Backend.mediaArtist + " - " + Backend.mediaTitle : "No Media Playing"
                 color: "white"
                 font.family: AppTheme.mainFont
                 font.pixelSize: AppTheme.fontSize
