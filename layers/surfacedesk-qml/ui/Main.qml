@@ -199,17 +199,16 @@ Item {
             visible: false
         }
 
-        MultiEffect {
+MultiEffect {
             id: blurEffect
             anchors.fill: parent
             source: bgImage
-            blurEnabled: true
-            blur: (wallpaperBackend && wallpaperBackend.isPickingWallpaper) ? 1.0 : 0.0
-            brightness: (wallpaperBackend && wallpaperBackend.isPickingWallpaper) ? -0.15 : 0.0
+            blurEnabled: false // THE FIX: Disabled blur entirely
+            blur: 0.0
+            brightness: 0.0
             Behavior on blur { NumberAnimation { duration: 180; easing.type: Easing.InOutQuad } }
             Behavior on brightness { NumberAnimation { duration: 180; easing.type: Easing.InOutQuad } }
         }
-
         Rectangle {
             id: dragHighlightRect
             visible: mainRoot.showDragHighlight && (wallpaperBackend && wallpaperBackend.isEditing)

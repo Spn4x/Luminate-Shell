@@ -30,9 +30,8 @@ Item {
         down: false
     }
 
-    // Launcher and Screenshot Edit get absolute priority over isPinned
     property string activeState: {
-        if (Backend.displayMode === "launcher" || Backend.displayMode === "screenshot_edit") {
+        if (Backend.displayMode === "launcher" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "wallpaper") {
             return "expanded";
         }
         if (isPinned) {
@@ -72,6 +71,9 @@ Item {
             if (Backend.displayMode === "screenshot_edit") {
                 return AppTheme.screenshotEditWidth || 1100;
             }
+            if (Backend.displayMode === "wallpaper") {
+                return 700; // THE FIX: Compact Width
+            }
             return AppTheme.expandedMinWidth || 420;
         }
         if (activeState === "statusbar") {
@@ -101,6 +103,9 @@ Item {
             }
             if (Backend.displayMode === "screenshot_edit") {
                 return AppTheme.screenshotEditHeight || 620;
+            }
+            if (Backend.displayMode === "wallpaper") {
+                return 170; // THE FIX: Compact Height
             }
             if (Backend.displayMode === "notification") {
                 return edgeHelper.notifHeight + 32;
@@ -223,15 +228,9 @@ Item {
         bottomLeftRadius: 0
         bottomRightRadius: 0
         
-        Behavior on width { 
-            NumberAnimation { duration: 350; easing.type: Easing.OutCubic } 
-        }
-        Behavior on height { 
-            NumberAnimation { duration: 350; easing.type: Easing.OutCubic } 
-        }
-        Behavior on currentRadius { 
-            NumberAnimation { duration: 350; easing.type: Easing.OutCubic } 
-        }
+        Behavior on width { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
+        Behavior on height { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
+        Behavior on currentRadius { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
 
         color: AppTheme.bg
         border.color: root.isPinned ? AppTheme.borderAlpha : (activeState === "passive" ? "transparent" : AppTheme.borderAlpha)
@@ -312,9 +311,7 @@ Item {
                 opacity: activeState === "passive" ? 1 : 0
                 visible: opacity > 0
                 
-                Behavior on opacity { 
-                    NumberAnimation { duration: 150 } 
-                }
+                Behavior on opacity { NumberAnimation { duration: 150 } }
                 
                 Rectangle { 
                     anchors.centerIn: parent
@@ -322,10 +319,7 @@ Item {
                     height: 4
                     radius: 2
                     color: Backend.displayMode !== "idle" ? AppTheme.accent : "#55ffffff"
-                    
-                    Behavior on color { 
-                        ColorAnimation { duration: 200 } 
-                    } 
+                    Behavior on color { ColorAnimation { duration: 200 } } 
                 }
             }
 
@@ -336,9 +330,7 @@ Item {
                 opacity: activeState === "statusbar" ? 1 : 0
                 visible: opacity > 0
                 
-                Behavior on opacity { 
-                    NumberAnimation { duration: 150 } 
-                }
+                Behavior on opacity { NumberAnimation { duration: 150 } }
 
                 showPortal: false
                 isPinned: root.isPinned
@@ -405,9 +397,7 @@ Item {
                 opacity: activeState === "pill" ? 1 : 0
                 visible: opacity > 0
                 
-                Behavior on opacity { 
-                    NumberAnimation { duration: 150 } 
-                }
+                Behavior on opacity { NumberAnimation { duration: 150 } }
 
                 Item {
                     anchors.fill: parent
@@ -436,10 +426,7 @@ Item {
                                 height: parent.height
                                 radius: 5
                                 color: AppTheme.fg
-                                
-                                Behavior on width { 
-                                    NumberAnimation { duration: 150; easing.type: Easing.OutCubic } 
-                                } 
+                                Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } } 
                             }
                         }
                         
@@ -482,15 +469,9 @@ Item {
                             id: solidTitleText
                             anchors.verticalCenter: parent.verticalCenter
                             text: { 
-                                if (Backend.displayMode === "screenshot_info") {
-                                    return "Screenshot Captured"; 
-                                }
-                                if (Backend.displayMode === "notification") {
-                                    return Backend.summary; 
-                                }
-                                if (Backend.displayMode === "privacy") {
-                                    return Backend.privacySummary; 
-                                }
+                                if (Backend.displayMode === "screenshot_info") return "Screenshot Captured"; 
+                                if (Backend.displayMode === "notification") return Backend.summary; 
+                                if (Backend.displayMode === "privacy") return Backend.privacySummary; 
                                 return ""; 
                             }
                             color: AppTheme.fg
@@ -515,16 +496,14 @@ Item {
             opacity: activeState === "expanded" ? 1 : 0
             visible: opacity > 0
             
-            Behavior on opacity { 
-                NumberAnimation { duration: 150 } 
-            }
+            Behavior on opacity { NumberAnimation { duration: 150 } }
 
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 
                 onClicked: (mouse) => {
-                    if (Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher") {
+                    if (Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper") {
                         return;
                     }
                     Backend.isExpanded = false;
@@ -558,19 +537,23 @@ Item {
                 anchors.margins: 5
                 visible: Backend.displayMode === "launcher" 
             }
+
+            WallpaperChooser {
+                id: wallpaperChooser
+                anchors.fill: parent
+                visible: Backend.displayMode === "wallpaper"
+            }
         }
     }
 
     function startTimer() {
         autoDismissTimer.stop();
         
-        // THE BUG FIX: If the bar is pinned, dots are PERSISTENT.
-        // We completely skip starting the timer, unless it's a volume popup.
         if (isPinned && Backend.displayMode !== "osd") {
             return;
         }
 
-        if (activeState === "expanded" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher") {
+        if (activeState === "expanded" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper") {
             return;
         }
         if (pulltabMenu.expanded) {
@@ -609,23 +592,19 @@ Item {
 
     Connections {
         target: Backend
-        function onRequestShow() { 
-            root.startTimer(); 
-        }
+        function onRequestShow() { root.startTimer(); }
         function onRequestHide() { 
             autoDismissTimer.stop(); 
             pulltabMenu.expanded = false; 
             root.isPeeking = false; 
         }
         function onOsdChanged() { 
-            if (Backend.displayMode === "osd") {
-                root.startTimer(); 
-            }
+            if (Backend.displayMode === "osd") root.startTimer(); 
         }
         function onDisplayModeChanged() {
-            if (Backend.displayMode === "launcher") { 
+            if (Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper") { 
                 autoDismissTimer.stop(); 
-                launcherModule.openAndFocus(); 
+                if (Backend.displayMode === "launcher") launcherModule.openAndFocus(); 
                 return; 
             }
             if (Backend.displayMode === "screenshot_edit" || (Backend.displayMode === "media" && Backend.mediaPinned)) { 

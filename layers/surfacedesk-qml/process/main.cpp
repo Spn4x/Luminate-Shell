@@ -19,7 +19,6 @@
 #include "Storage.h"
 
 static QMap<QScreen*, QQuickView*> s_windows;
-static QMap<QScreen*, QQuickView*> s_chooserWindows;
 static QMap<QScreen*, QQuickView*> s_lockScreenWindows;
 
 static WallpaperBackend* s_backend = nullptr;
@@ -72,49 +71,6 @@ void createWallpaperWindow(QScreen* screen) {
                 layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
             }
         });
-    }
-}
-
-void createChooserWindow(QScreen* screen) {
-    if (s_chooserWindows.contains(screen)) return;
-
-    auto* view = new QQuickView(s_engine, nullptr);
-    view->setScreen(screen);
-    view->setColor(Qt::transparent);
-    view->setResizeMode(QQuickView::SizeRootObjectToView);
-
-    if (auto* layerWindow = LayerShellQt::Window::get(view)) {
-        layerWindow->setLayer(LayerShellQt::Window::LayerOverlay);
-        layerWindow->setScope(QStringLiteral("wallpaper-chooser"));
-        layerWindow->setExclusiveZone(-1);
-        layerWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
-        
-        layerWindow->setAnchors(LayerShellQt::Window::Anchors(LayerShellQt::Window::AnchorTop) | 
-                               LayerShellQt::Window::AnchorBottom | 
-                               LayerShellQt::Window::AnchorLeft | 
-                               LayerShellQt::Window::AnchorRight);
-    }
-
-    view->rootContext()->setContextProperty("wallpaperBackend", s_backend);
-    view->rootContext()->setContextProperty("desktopStorage", s_storage);
-    view->setSource(QUrl(QStringLiteral("qrc:/ui/modules/WallpaperChooser.qml")));
-    view->show();
-
-    QObject::connect(view, &QWindow::activeChanged, [view]() {
-        if (!view->isActive() && s_backend->isPickingWallpaper()) {
-            s_backend->setWallpaper(s_backend->confirmedWallpaper());
-            s_backend->setIsPickingWallpaper(false);
-        }
-    });
-
-    s_chooserWindows.insert(screen, view);
-}
-
-void destroyChooserWindow(QScreen* screen) {
-    if (s_chooserWindows.contains(screen)) {
-        auto* view = s_chooserWindows.take(screen);
-        view->close();
-        view->deleteLater();
     }
 }
 
@@ -260,15 +216,6 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    QObject::connect(s_backend, &WallpaperBackend::isPickingWallpaperChanged, []() {
-        bool active = s_backend->isPickingWallpaper();
-        const auto screens = QGuiApplication::screens();
-        for (auto* screen : screens) {
-            if (active) createChooserWindow(screen);
-            else destroyChooserWindow(screen);
-        }
-    });
-
     QObject::connect(s_backend, &WallpaperBackend::isEditingChanged, updateLayerStates);
     QObject::connect(s_backend, &WallpaperBackend::isEditingLockscreenChanged, updateLayerStates);
     QObject::connect(s_backend, &WallpaperBackend::isLockedChanged, updateLayerStates);
@@ -288,7 +235,6 @@ int main(int argc, char *argv[]) {
             view->close();
             view->deleteLater();
         }
-        destroyChooserWindow(screen);
         destroyLockScreenWindow(screen);
     });
 

@@ -60,8 +60,8 @@ int main(int argc, char *argv[])
             static QString lastMode = "";
             QString currentMode = backend.displayMode();
             
-            bool needsFocus = (currentMode == "screenshot_edit" || currentMode == "launcher");
-            bool hadFocus = (lastMode == "screenshot_edit" || lastMode == "launcher");
+            bool needsFocus = (currentMode == "screenshot_edit" || currentMode == "launcher" || currentMode == "wallpaper");
+            bool hadFocus = (lastMode == "screenshot_edit" || lastMode == "launcher" || lastMode == "wallpaper");
             
             if (needsFocus && !hadFocus) {
                 lsWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);

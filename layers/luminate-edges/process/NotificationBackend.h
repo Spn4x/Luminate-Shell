@@ -63,6 +63,15 @@ class NotificationBackend : public QObject, protected QDBusContext {
     Q_PROPERTY(QString sysOsName READ sysOsName NOTIFY systemInfoChanged)
     Q_PROPERTY(QString sysUptime READ sysUptime NOTIFY systemInfoChanged)
 
+    Q_PROPERTY(QString currentWallpaper READ currentWallpaper NOTIFY currentWallpaperChanged)
+    Q_PROPERTY(QString confirmedWallpaper READ confirmedWallpaper NOTIFY confirmedWallpaperChanged)
+    Q_PROPERTY(QStringList wallpaperList READ wallpaperList NOTIFY wallpaperListChanged)
+    Q_PROPERTY(bool isPickingWallpaper READ isPickingWallpaper NOTIFY isPickingWallpaperChanged)
+    Q_PROPERTY(QString currentResolution READ currentResolution NOTIFY currentResolutionChanged)
+    
+    // THE FIX: Add the wallpaperPalette property
+    Q_PROPERTY(QStringList wallpaperPalette READ wallpaperPalette NOTIFY wallpaperPaletteChanged)
+
 public:
     explicit NotificationBackend(QObject *parent = nullptr);
 
@@ -107,9 +116,18 @@ public:
     QString sysOsName() const { return m_sysOsName; }
     QString sysUptime() const { return m_sysUptime; }
 
+    QString currentWallpaper() const { return m_currentWallpaper; }
+    QString confirmedWallpaper() const { return m_confirmedWallpaper; }
+    QStringList wallpaperList() const { return m_wallpaperList; }
+    bool isPickingWallpaper() const { return m_isPickingWallpaper; }
+    QString currentResolution() const { return m_currentResolution; }
+    
+    // THE FIX: Provide the getter for wallpaperPalette
+    QStringList wallpaperPalette() const { return m_wallpaperPalette; }
+
     Q_INVOKABLE void invokeAction(const QString& actionId);
     Q_INVOKABLE void readyForNext();
-    Q_INVOKABLE void closeNotification(); // <-- ADDED: Explicit Notification dismissal
+    Q_INVOKABLE void closeNotification();
     
     Q_INVOKABLE void killPrivacyApp(uint pid, const QString& name);
     Q_INVOKABLE void ignorePrivacyApp(uint pid, const QString& name);
@@ -128,6 +146,11 @@ public:
     Q_INVOKABLE void copyTextToClipboard(const QString& text);
 
     Q_INVOKABLE void closeLauncher();
+
+    Q_INVOKABLE void selectWallpaper(const QString &path);
+    Q_INVOKABLE void commitWallpaper();
+    Q_INVOKABLE void cancelWallpaper();
+    Q_INVOKABLE void toggleWallpaperMode();
 
 public slots: 
     void ShowNotification(uint id, const QString &icon, const QString &summary, const QString &body, const QStringList &actions);
@@ -161,6 +184,15 @@ signals:
     void ocrResultsChanged();
     void niriWindowsChanged();
     void windowScreenshotReady(const QString& path);
+
+    void currentWallpaperChanged();
+    void confirmedWallpaperChanged();
+    void wallpaperListChanged();
+    void isPickingWallpaperChanged();
+    void currentResolutionChanged();
+    
+    // THE FIX: Provide the signal for wallpaperPalette
+    void wallpaperPaletteChanged();
 
 private:
     void processNext();
@@ -214,6 +246,15 @@ private:
     QString m_sysUptime;
 
     QVariantMap m_themeData;
+
+    QString m_currentWallpaper;
+    QString m_confirmedWallpaper;
+    QStringList m_wallpaperList;
+    bool m_isPickingWallpaper = false;
+    QString m_currentResolution;
+    
+    // THE FIX: Add the member variable for wallpaperPalette
+    QStringList m_wallpaperPalette;
     
 private slots:
     void onSurfaceDeskPropsChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);

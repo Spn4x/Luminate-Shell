@@ -67,59 +67,59 @@ bool WallpaperBackend::authenticatePassword(const QString &password) {
 }
 
 void WallpaperBackend::generateTheme(const QString &wallpaperPath) {
-    qDebug() << "[SurfaceDesk] Generating theme with wallust for:" << wallpaperPath;
-    QProcess proc;
-    proc.start("wallust", QStringList() << "run" << "--backend" << "wal" << "--quiet" << wallpaperPath);
-    proc.waitForFinished();
-    qDebug() << "[SurfaceDesk] Wallust finished with code:" << proc.exitCode();
+    qDebug() << "[SurfaceDesk] Generating theme asynchronously with wallust for:" << wallpaperPath;
+    
+    QProcess *proc = new QProcess(this);
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this, proc](int exitCode, QProcess::ExitStatus exitStatus) {
+        if (exitStatus == QProcess::NormalExit && exitCode == 0) {
+            updatePalette();
 
-    // Re-evaluate palette and broadcast immediately
-    updatePalette();
+            QString cachePath = QDir::homePath() + "/.cache/wallust/scriptable_colors.txt";
+            QFile cacheFile(cachePath);
+            QMap<QString, QString> theme;
+            if (cacheFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                QTextStream in(&cacheFile);
+                while (!in.atEnd()) {
+                    QString line = in.readLine().trimmed();
+                    if (line.contains('=')) {
+                        QStringList parts = line.split('=');
+                        if (parts.size() == 2) theme[parts[0].trimmed()] = parts[1].trimmed().remove('\'').remove('"');
+                    }
+                }
+                cacheFile.close();
+            }
 
-    // Update Kitty Terminal natively via its socket
-    QString cachePath = QDir::homePath() + "/.cache/wallust/scriptable_colors.txt";
-    QFile cacheFile(cachePath);
-    QMap<QString, QString> theme;
-    if (cacheFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QTextStream in(&cacheFile);
-        while (!in.atEnd()) {
-            QString line = in.readLine().trimmed();
-            if (line.contains('=')) {
-                QStringList parts = line.split('=');
-                if (parts.size() == 2) theme[parts[0].trimmed()] = parts[1].trimmed().remove('\'').remove('"');
+            if (qEnvironmentVariableIsSet("HYPRLAND_INSTANCE_SIGNATURE")) {
+                QString hyprPath = QDir::homePath() + "/.config/hypr/colors-hyprland-generated.conf";
+                QString c4 = theme["color4"].mid(1), c6 = theme["color6"].mid(1), c0 = theme["color0"].mid(1);
+                QString hyprConf = QString("$wallust_background = %1\n$wallust_foreground = %2\n$wallust_color4 = %3\ngeneral {\n    col.active_border = rgba(%4ff) rgba(%5ff) 45deg\n    col.inactive_border = rgba(%6aa)\n}\n")
+                                   .arg(theme["background"]).arg(theme["foreground"]).arg(theme["color4"]).arg(c4).arg(c6).arg(c0);
+                QFile hyprFile(hyprPath);
+                if (hyprFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                    QTextStream out(&hyprFile); out << hyprConf; hyprFile.close();
+                    QProcess::startDetached("hyprctl", {"reload"});
+                }
+            }
+
+            QString kittyPath = QDir::homePath() + "/.config/kitty/theme-wallust-generated.conf";
+            QFile kittyFile(kittyPath);
+            if (kittyFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream out(&kittyFile);
+                out << "foreground " << QColor(theme["foreground"]).lighter(150).name() << "\n";
+                out << "background " << theme["background"] << "\n";
+                out << "cursor " << QColor(theme["cursor"]).lighter(150).name() << "\n";
+                for (int i=0; i<16; i++) out << "color" << i << " " << QColor(theme[QString("color%1").arg(i)]).lighter(150).name() << "\n";
+                kittyFile.close();
+                QProcess::startDetached("pkill", {"-SIGUSR1", "kitty"});
             }
         }
-        cacheFile.close();
-    }
+        proc->deleteLater();
+    });
 
-    if (qEnvironmentVariableIsSet("HYPRLAND_INSTANCE_SIGNATURE")) {
-        QString hyprPath = QDir::homePath() + "/.config/hypr/colors-hyprland-generated.conf";
-        QString c4 = theme["color4"].mid(1), c6 = theme["color6"].mid(1), c0 = theme["color0"].mid(1);
-        QString hyprConf = QString("$wallust_background = %1\n$wallust_foreground = %2\n$wallust_color4 = %3\ngeneral {\n    col.active_border = rgba(%4ff) rgba(%5ff) 45deg\n    col.inactive_border = rgba(%6aa)\n}\n")
-                           .arg(theme["background"]).arg(theme["foreground"]).arg(theme["color4"]).arg(c4).arg(c6).arg(c0);
-        QFile hyprFile(hyprPath);
-        if (hyprFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QTextStream out(&hyprFile); out << hyprConf; hyprFile.close();
-            QProcess::startDetached("hyprctl", {"reload"});
-            qDebug() << "[SurfaceDesk] Triggered hyprctl reload for borders.";
-        }
-    }
-
-    QString kittyPath = QDir::homePath() + "/.config/kitty/theme-wallust-generated.conf";
-    QFile kittyFile(kittyPath);
-    if (kittyFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&kittyFile);
-        out << "foreground " << QColor(theme["foreground"]).lighter(150).name() << "\n";
-        out << "background " << theme["background"] << "\n";
-        out << "cursor " << QColor(theme["cursor"]).lighter(150).name() << "\n";
-        for (int i=0; i<16; i++) out << "color" << i << " " << QColor(theme[QString("color%1").arg(i)]).lighter(150).name() << "\n";
-        kittyFile.close();
-        QProcess::startDetached("pkill", {"-SIGUSR1", "kitty"});
-    }
+    proc->start("wallust", QStringList() << "run" << "--backend" << "wal" << "--quiet" << wallpaperPath);
 }
 
 void WallpaperBackend::updatePalette() {
-    qDebug() << "[SurfaceDesk] Updating internal color palette...";
     QString cachePath = QDir::homePath() + "/.cache/wallust/scriptable_colors.txt";
     QFile file(cachePath);
     QMap<QString, QString> cMap;
@@ -133,23 +133,17 @@ void WallpaperBackend::updatePalette() {
             }
         }
         file.close();
-    } else {
-        qWarning() << "[SurfaceDesk] Failed to open wallust cache!";
     }
 
-    // 1. Array for legacy surfacedesk UI widgets
     const QStringList keys = { "foreground", "color0", "color1", "color2", "color3", "color4", "color5", "color6", "color7", "color8", "color9", "color10", "color11", "color12", "color13", "color14", "color15" };
     m_wallpaperPalette.clear();
     for (const QString &k : keys) m_wallpaperPalette.append(cMap.value(k, "#FFFFFF"));
     emit wallpaperPaletteChanged();
 
-    // 2. Dictionary Map for Luminate Edges via D-Bus!
     QColor bg(cMap.value("background", "#000000"));
     QColor fg(cMap.value("foreground", "#ffffff"));
     QColor acc(cMap.value("color4", "#00ffcc"));
     QColor surf = bg.lighter(130);
-
-    // Provide a crisp, bright base accent without muddying it
     QColor smartAcc = acc.lighter(115);
 
     QVariantMap newTheme;
@@ -161,11 +155,10 @@ void WallpaperBackend::updatePalette() {
     m_themeMap = newTheme;
     emit themeMapChanged();
     
-    qDebug() << "[SurfaceDesk] Broadcasting ThemeMap to DBus:" << newTheme;
-
-    // Force the D-Bus properties signal so Edges updates instantly in memory
     QDBusMessage sig = QDBusMessage::createSignal("/com/meismeric/SurfaceDesk", "org.freedesktop.DBus.Properties", "PropertiesChanged");
-    QVariantMap props; props["themeMap"] = m_themeMap;
+    QVariantMap props; 
+    props["themeMap"] = m_themeMap;
+    props["wallpaperPalette"] = m_wallpaperPalette; // THE FIX: Broadcast palette to Edges
     sig << "com.meismeric.SurfaceDesk" << props << QStringList();
     QDBusConnection::sessionBus().send(sig);
 }
@@ -268,11 +261,9 @@ void WallpaperBackend::mediaNext() { sendMprisCommand("Next"); }
 void WallpaperBackend::mediaPrev() { sendMprisCommand("Previous"); }
 
 void WallpaperBackend::loadWallpapers() {
-    qDebug() << "[SurfaceDesk] loadWallpapers() triggered.";
     QString path = "/home/meismeric/Pictures/Wallpapers";
     QDir dir(path);
     if (!dir.exists()) {
-        qWarning() << "[SurfaceDesk] Wallpaper directory does not exist:" << path;
         return;
     }
 
@@ -283,16 +274,28 @@ void WallpaperBackend::loadWallpapers() {
         QSettings settings;
         QString lastWallpaper = settings.value("lastWallpaper").toString();
         m_currentWallpaper = (!lastWallpaper.isEmpty() && m_wallpaperList.contains(lastWallpaper)) ? lastWallpaper : m_wallpaperList.first();
-        qDebug() << "[SurfaceDesk] Current wallpaper selected:" << m_currentWallpaper;
+        m_confirmedWallpaper = m_currentWallpaper;
         
         generateTheme(m_currentWallpaper);
         updateResolution(m_currentWallpaper);
     } else {
         m_currentWallpaper = "";
+        m_confirmedWallpaper = "";
     }
 
     emit wallpaperListChanged();
     emit currentWallpaperChanged();
+    emit confirmedWallpaperChanged();
+
+    QDBusMessage sig = QDBusMessage::createSignal("/com/meismeric/SurfaceDesk", "org.freedesktop.DBus.Properties", "PropertiesChanged");
+    QVariantMap props;
+    props["wallpaperList"] = m_wallpaperList;
+    props["currentWallpaper"] = m_currentWallpaper;
+    props["confirmedWallpaper"] = m_confirmedWallpaper;
+    props["currentResolution"] = m_currentResolution;
+    props["wallpaperPalette"] = m_wallpaperPalette; // Also include on init
+    sig << "com.meismeric.SurfaceDesk" << props << QStringList();
+    QDBusConnection::sessionBus().send(sig);
 }
 
 void WallpaperBackend::updateResolution(const QString &path) {
@@ -302,24 +305,65 @@ void WallpaperBackend::updateResolution(const QString &path) {
 }
 
 QString WallpaperBackend::currentWallpaper() const { return m_currentWallpaper; }
+
 void WallpaperBackend::setWallpaper(const QString &path) {
     if (m_currentWallpaper != path) {
         m_currentWallpaper = path;
-        QSettings settings; settings.setValue("lastWallpaper", m_currentWallpaper);
         emit currentWallpaperChanged();
         generateTheme(path);
         updateResolution(path);
+
+        QDBusMessage sig = QDBusMessage::createSignal("/com/meismeric/SurfaceDesk", "org.freedesktop.DBus.Properties", "PropertiesChanged");
+        QVariantMap props;
+        props["currentWallpaper"] = m_currentWallpaper;
+        props["currentResolution"] = m_currentResolution;
+        sig << "com.meismeric.SurfaceDesk" << props << QStringList();
+        QDBusConnection::sessionBus().send(sig);
     }
+}
+
+void WallpaperBackend::commitWallpaper() {
+    m_confirmedWallpaper = m_currentWallpaper;
+    
+    QSettings settings;
+    settings.setValue("lastWallpaper", m_confirmedWallpaper);
+    settings.sync(); 
+    
+    emit confirmedWallpaperChanged();
+    setIsPickingWallpaper(false);
+
+    QDBusMessage sig = QDBusMessage::createSignal("/com/meismeric/SurfaceDesk", "org.freedesktop.DBus.Properties", "PropertiesChanged");
+    QVariantMap props;
+    props["confirmedWallpaper"] = m_confirmedWallpaper;
+    props["isPickingWallpaper"] = false;
+    sig << "com.meismeric.SurfaceDesk" << props << QStringList();
+    QDBusConnection::sessionBus().send(sig);
+}
+
+void WallpaperBackend::cancelWallpaper() {
+    setWallpaper(m_confirmedWallpaper);
+    setIsPickingWallpaper(false);
 }
 
 QStringList WallpaperBackend::wallpaperList() const { return m_wallpaperList; }
 bool WallpaperBackend::isPickingWallpaper() const { return m_isPickingWallpaper; }
+
 void WallpaperBackend::setIsPickingWallpaper(bool picking) {
     if (m_isPickingWallpaper != picking) {
         m_isPickingWallpaper = picking;
         updateWorkspaceState();
-        if (m_isPickingWallpaper) { m_confirmedWallpaper = m_currentWallpaper; emit confirmedWallpaperChanged(); }
+        if (m_isPickingWallpaper) { 
+            m_confirmedWallpaper = m_currentWallpaper; 
+            emit confirmedWallpaperChanged(); 
+        }
         emit isPickingWallpaperChanged();
+
+        QDBusMessage sig = QDBusMessage::createSignal("/com/meismeric/SurfaceDesk", "org.freedesktop.DBus.Properties", "PropertiesChanged");
+        QVariantMap props;
+        props["isPickingWallpaper"] = m_isPickingWallpaper;
+        props["confirmedWallpaper"] = m_confirmedWallpaper;
+        sig << "com.meismeric.SurfaceDesk" << props << QStringList();
+        QDBusConnection::sessionBus().send(sig);
     }
 }
 

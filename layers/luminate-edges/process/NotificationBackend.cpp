@@ -35,21 +35,47 @@ NotificationBackend::NotificationBackend(QObject *parent) : QObject(parent) {
         this, SLOT(onSurfaceDeskPropsChanged(QString, QVariantMap, QStringList))
     );
 
-    QDBusMessage msg = QDBusMessage::createMethodCall("com.meismeric.SurfaceDesk", "/com/meismeric/SurfaceDesk", "org.freedesktop.DBus.Properties", "Get");
-    msg << "com.meismeric.SurfaceDesk" << "themeMap";
+    QDBusMessage msg = QDBusMessage::createMethodCall("com.meismeric.SurfaceDesk", "/com/meismeric/SurfaceDesk", "org.freedesktop.DBus.Properties", "GetAll");
+    msg << "com.meismeric.SurfaceDesk";
     
     QDBusPendingCall call = bus.asyncCall(msg);
     QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
-        QDBusPendingReply<QDBusVariant> reply = *w;
+        QDBusPendingReply<QVariantMap> reply = *w;
         if (reply.isValid()) {
-            QVariant val = reply.value().variant();
-            if (val.userType() == qMetaTypeId<QDBusArgument>()) {
-                m_themeData = qdbus_cast<QVariantMap>(val.value<QDBusArgument>());
-            } else {
-                m_themeData = val.toMap();
+            QVariantMap props = reply.value();
+            if (props.contains("themeMap")) {
+                QVariant val = props["themeMap"];
+                if (val.userType() == qMetaTypeId<QDBusArgument>()) m_themeData = qdbus_cast<QVariantMap>(val.value<QDBusArgument>());
+                else m_themeData = val.toMap();
+                emit themeChanged();
             }
-            emit themeChanged();
+            if (props.contains("currentWallpaper")) {
+                m_currentWallpaper = props["currentWallpaper"].toString();
+                emit currentWallpaperChanged();
+            }
+            if (props.contains("confirmedWallpaper")) {
+                m_confirmedWallpaper = props["confirmedWallpaper"].toString();
+                emit confirmedWallpaperChanged();
+            }
+            if (props.contains("isPickingWallpaper")) {
+                m_isPickingWallpaper = props["isPickingWallpaper"].toBool();
+                emit isPickingWallpaperChanged();
+                updateDisplayMode();
+            }
+            if (props.contains("wallpaperList")) {
+                m_wallpaperList = props["wallpaperList"].toStringList();
+                emit wallpaperListChanged();
+            }
+            if (props.contains("currentResolution")) {
+                m_currentResolution = props["currentResolution"].toString();
+                emit currentResolutionChanged();
+            }
+            // THE FIX: Parse the palette upon UI load
+            if (props.contains("wallpaperPalette")) {
+                m_wallpaperPalette = props["wallpaperPalette"].toStringList();
+                emit wallpaperPaletteChanged();
+            }
         }
         w->deleteLater();
     });
@@ -58,15 +84,57 @@ NotificationBackend::NotificationBackend(QObject *parent) : QObject(parent) {
 void NotificationBackend::onSurfaceDeskPropsChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated) {
     Q_UNUSED(interface);
     Q_UNUSED(invalidated);
+    
+    bool changedTheme = false;
+    bool changedWallpaper = false;
+    bool changedConfirmed = false;
+    bool changedPicking = false;
+    bool changedList = false;
+    bool changedResolution = false;
+    bool changedPalette = false; // THE FIX
+
     if (changed.contains("themeMap")) {
         QVariant val = changed["themeMap"];
-        if (val.userType() == qMetaTypeId<QDBusArgument>()) {
-            m_themeData = qdbus_cast<QVariantMap>(val.value<QDBusArgument>());
-        } else {
-            m_themeData = val.toMap();
-        }
-        emit themeChanged();
+        if (val.userType() == qMetaTypeId<QDBusArgument>()) m_themeData = qdbus_cast<QVariantMap>(val.value<QDBusArgument>());
+        else m_themeData = val.toMap();
+        changedTheme = true;
     }
+    if (changed.contains("currentWallpaper")) {
+        m_currentWallpaper = changed["currentWallpaper"].toString();
+        changedWallpaper = true;
+    }
+    if (changed.contains("confirmedWallpaper")) {
+        m_confirmedWallpaper = changed["confirmedWallpaper"].toString();
+        changedConfirmed = true;
+    }
+    if (changed.contains("isPickingWallpaper")) {
+        m_isPickingWallpaper = changed["isPickingWallpaper"].toBool();
+        changedPicking = true;
+    }
+    if (changed.contains("wallpaperList")) {
+        m_wallpaperList = changed["wallpaperList"].toStringList();
+        changedList = true;
+    }
+    if (changed.contains("currentResolution")) {
+        m_currentResolution = changed["currentResolution"].toString();
+        changedResolution = true;
+    }
+    // THE FIX: Parse palette dynamically from signals
+    if (changed.contains("wallpaperPalette")) {
+        m_wallpaperPalette = changed["wallpaperPalette"].toStringList();
+        changedPalette = true;
+    }
+
+    if (changedTheme) emit themeChanged();
+    if (changedWallpaper) emit currentWallpaperChanged();
+    if (changedConfirmed) emit confirmedWallpaperChanged();
+    if (changedPicking) {
+        emit isPickingWallpaperChanged();
+        updateDisplayMode(); 
+    }
+    if (changedList) emit wallpaperListChanged();
+    if (changedResolution) emit currentResolutionChanged();
+    if (changedPalette) emit wallpaperPaletteChanged(); // THE FIX: Fire the event for QML
 }
 
 void NotificationBackend::updateSystemInfo() {
@@ -103,7 +171,6 @@ void NotificationBackend::updateSystemInfo() {
         m_sysUptime = parts.join(", ");
         uptimeFile.close();
     }
-    
     emit systemInfoChanged();
 }
 
@@ -326,7 +393,7 @@ void NotificationBackend::fetchDuration() {
 }
 
 void NotificationBackend::TriggerMediaPeek() {
-    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher) return; 
+    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper) return; 
     
     m_displayMode = "media";
     emit displayModeChanged();
@@ -334,14 +401,13 @@ void NotificationBackend::TriggerMediaPeek() {
 }
 
 void NotificationBackend::TriggerSystemPeek() {
-    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || hasMedia()) return;
+    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper || hasMedia()) return;
     
     updateSystemInfo();
     m_isShowingSystem = true;
     updateDisplayMode();
 }
 
-// THE FIX: Bulletproof Notification Queue state clearing.
 void NotificationBackend::processNext() {
     if (!m_queue.isEmpty() && !m_isShowingNotif) {
         m_current = m_queue.dequeue();
@@ -349,14 +415,14 @@ void NotificationBackend::processNext() {
         emit queueChanged();
         emit notificationChanged();
     } else if (m_queue.isEmpty() && !m_isShowingNotif) {
-        m_current = NotificationData(); // Clears memory of old notification entirely
+        m_current = NotificationData();
         emit notificationChanged();
     }
     updateDisplayMode();
 }
 
 void NotificationBackend::readyForNext() {
-    if (m_displayMode == "screenshot_info" || m_displayMode == "screenshot_edit" || m_displayMode == "launcher") {
+    if (m_displayMode == "screenshot_info" || m_displayMode == "screenshot_edit" || m_displayMode == "launcher" || m_displayMode == "wallpaper") {
         return; 
     }
     
@@ -378,7 +444,6 @@ void NotificationBackend::readyForNext() {
     processNext();
 }
 
-// THE FIX: Explicit pulltab dismissal override
 void NotificationBackend::closeNotification() {
     m_isShowingNotif = false;
     processNext();
@@ -386,11 +451,12 @@ void NotificationBackend::closeNotification() {
 
 void NotificationBackend::updateDisplayMode() {
     QString oldMode = m_displayMode;
-    
     bool mediaValid = !m_activePlayerName.isEmpty() && m_mediaStatus != "Stopped";
 
     if (m_isShowingLauncher) {
         m_displayMode = "launcher";
+    } else if (m_isPickingWallpaper) { 
+        m_displayMode = "wallpaper";
     } else if (m_screenshotState == "info") {
         m_displayMode = "screenshot_info";
     } else if (m_screenshotState == "edit") {
@@ -413,12 +479,9 @@ void NotificationBackend::updateDisplayMode() {
 
     if (m_displayMode != oldMode) {
         emit displayModeChanged();
-        if (m_displayMode == "idle") {
-            emit requestHide();
-        } else {
-            emit requestShow(); 
-        }
-    } else if (m_displayMode == "notification" || m_displayMode == "osd" || m_displayMode == "launcher" || m_displayMode == "system") {
+        if (m_displayMode == "idle") emit requestHide();
+        else emit requestShow(); 
+    } else if (m_displayMode == "notification" || m_displayMode == "osd" || m_displayMode == "launcher" || m_displayMode == "system" || m_displayMode == "wallpaper") {
         emit requestShow(); 
     } else if (m_displayMode == "idle") {
         emit requestHide(); 
@@ -687,4 +750,25 @@ void NotificationBackend::triggerLauncherFlow() {
 void NotificationBackend::closeLauncher() {
     m_isShowingLauncher = false;
     updateDisplayMode();
+}
+
+void NotificationBackend::selectWallpaper(const QString &path) {
+    QDBusMessage msg = QDBusMessage::createMethodCall("com.meismeric.SurfaceDesk", "/com/meismeric/SurfaceDesk", "com.meismeric.SurfaceDesk", "setWallpaper");
+    msg << path;
+    QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+}
+
+void NotificationBackend::commitWallpaper() {
+    QDBusMessage msg = QDBusMessage::createMethodCall("com.meismeric.SurfaceDesk", "/com/meismeric/SurfaceDesk", "com.meismeric.SurfaceDesk", "commitWallpaper");
+    QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+}
+
+void NotificationBackend::cancelWallpaper() {
+    QDBusMessage msg = QDBusMessage::createMethodCall("com.meismeric.SurfaceDesk", "/com/meismeric/SurfaceDesk", "com.meismeric.SurfaceDesk", "cancelWallpaper");
+    QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+}
+
+void NotificationBackend::toggleWallpaperMode() {
+    QDBusMessage msg = QDBusMessage::createMethodCall("com.meismeric.SurfaceDesk", "/com/meismeric/SurfaceDesk", "com.meismeric.SurfaceDesk", "ToggleWallpaperMode");
+    QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
 }

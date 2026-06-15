@@ -20,7 +20,6 @@ class WallpaperBackend : public QObject {
     Q_PROPERTY(bool isEditingLockscreen READ isEditingLockscreen WRITE setIsEditingLockscreen NOTIFY isEditingLockscreenChanged)
     Q_PROPERTY(bool isLocked READ isLocked WRITE setLocked NOTIFY isLockedChanged)
     
-    // NEW: Internal Theme Map for Edges
     Q_PROPERTY(QVariantMap themeMap READ themeMap NOTIFY themeMapChanged)
 
     Q_PROPERTY(int selectedWidgetIndex READ selectedWidgetIndex WRITE setSelectedWidgetIndex NOTIFY selectedWidgetIndexChanged)
@@ -40,8 +39,6 @@ public:
     explicit WallpaperBackend(QObject *parent = nullptr);
 
     QString currentWallpaper() const;
-    void setWallpaper(const QString &path);
-
     QStringList wallpaperList() const;
 
     bool isPickingWallpaper() const;
@@ -88,6 +85,9 @@ public:
     Q_INVOKABLE bool authenticatePassword(const QString &password);
 
 public slots:
+    // THE FIX: Moved to slots so D-Bus can invoke it
+    void setWallpaper(const QString &path);
+
     void ToggleWallpaperMode();
     void ToggleEditMode();
     void ToggleLockscreenEditMode();
@@ -96,6 +96,9 @@ public slots:
     void mediaPlayPause();
     void mediaNext();
     void mediaPrev();
+
+    void commitWallpaper();
+    void cancelWallpaper();
 
 signals:
     void currentWallpaperChanged();
