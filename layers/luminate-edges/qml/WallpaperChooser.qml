@@ -98,6 +98,9 @@ Item {
         
         model: realCount > 0 ? (realCount * loopMultiplier) : 0
         
+        // THE FIX: Immediately purges off-screen items from RAM
+        cacheBuffer: 0
+
         spacing: 24
         snapMode: ListView.SnapToItem
         highlightRangeMode: ListView.StrictlyEnforceRange
@@ -135,7 +138,6 @@ Item {
                 height: 90
                 anchors.centerIn: parent
                 
-                // Pushes the side-items smoothly downwards
                 anchors.verticalCenterOffset: Math.pow(delegateRoot.normalizedDist, 1.5) * 30
                 
                 radius: 12
@@ -148,6 +150,13 @@ Item {
                     source: modelData !== "" ? "file://" + modelData : ""
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                    
+                    // THE CRITICAL RAM FIX: 
+                    // Forces Qt to shrink the image into a lightweight thumbnail 
+                    // *before* storing it in the RAM. Drops RAM usage to ~200KB per image.
+                    sourceSize.width: 320
+                    sourceSize.height: 180
+
                     visible: false 
                 }
                 
@@ -263,15 +272,13 @@ Item {
         width: 140
         height: 20
 
-        // 1. The Raw Content (Oversized, rotated rectangles)
         Item {
             id: paletteContent
             anchors.fill: parent
-            visible: false // Hidden because it feeds the mask
+            visible: false 
 
             Row {
                 anchors.centerIn: parent
-                // Negative spacing clasps them tightly together, avoiding antialiasing gaps
                 spacing: -4 
                 
                 Repeater {
@@ -279,7 +286,7 @@ Item {
                     
                     Rectangle {
                         width: 28 
-                        height: 40 // Taller than the container so corners bleed out to be masked
+                        height: 40 
                         color: Backend.wallpaperPalette[index + 1] || "#ffffff"
                         rotation: 20
                         antialiasing: true
@@ -288,23 +295,20 @@ Item {
             }
         }
 
-        // 2. The Shape Mask (Perfect Pill)
         Rectangle {
             id: paletteMask
             anchors.fill: parent
-            radius: 10 // Gives the whole bar rounded pill ends
+            radius: 10 
             color: "black"
             visible: false
         }
 
-        // 3. Apply the mask (Cuts off all the messy bleeding corners)
         OpacityMask {
             anchors.fill: parent
             source: paletteContent
             maskSource: paletteMask
         }
 
-        // 4. Subtle unified border overlay
         Rectangle {
             anchors.fill: parent
             color: "transparent"

@@ -39,7 +39,8 @@ void printHelp() {
               << "  -l, --lock           Lock the screen\n\n"
               << "Shell UI:\n"
               << "  -s, --screenshot     Trigger Screenshot Flow\n"
-              << "  -r, --launcher       Trigger App/Search Launcher\n\n"
+              << "  -r, --launcher       Trigger App/Search Launcher\n"
+              << "  -t, --thinkfan       Trigger Thinkfan Dashboard\n\n" // ADDED
               << "Media Controls:\n"
               << "  -p, --play-pause     Toggle Media Play/Pause\n"
               << "  -n, --next           Next Track\n"
@@ -52,14 +53,14 @@ QString resolveBinary(const QString &appName, const QString &buildRelativePath) 
     QString appDir = QCoreApplication::applicationDirPath();
     QString localPath = QDir::cleanPath(appDir + "/" + buildRelativePath + "/" + appName);
     if (QFileInfo::exists(localPath)) {
-        return localPath; // Found in build directory!
+        return localPath; 
     }
-    return appName; // Assume it's installed to system PATH
+    return appName; 
 }
 
 void spawnProcess(const QString &executable) {
     QProcess *p = new QProcess();
-    p->setProcessChannelMode(QProcess::ForwardedChannels); // Pipe logs directly to this terminal
+    p->setProcessChannelMode(QProcess::ForwardedChannels); 
     
     std::cout << "[Luminate] Spawning: " << executable.toStdString() << std::endl;
     p->start(executable);
@@ -91,8 +92,6 @@ void startFullSession() {
 
     // Spawn Visual Shells
     spawnProcess(resolveBinary("luminate-surfacedesk", "../layers/surfacedesk-qml"));
-    
-    // Defaulting to Edges as the primary top/bottom bar UI
     spawnProcess(resolveBinary("luminate-edges", "../layers/luminate-edges/src"));
 
     std::cout << "==========================================\n";
@@ -107,10 +106,9 @@ int main(int argc, char *argv[]) {
     // If no arguments, we are the SESSION MANAGER
     if (args.size() == 1) {
         startFullSession();
-        return app.exec(); // Block and keep children alive
+        return app.exec(); 
     }
 
-    // If arguments are passed, we are the DBUS CLIENT
     QString arg = args[1];
 
     if (arg == "-h" || arg == "--help") {
@@ -131,14 +129,17 @@ int main(int argc, char *argv[]) {
         if (arg == "-el" || arg == "--edit-lock") iface.call("ToggleLockscreenEditMode");
         if (arg == "-l" || arg == "--lock") iface.call("setLocked", true);
     }
+    // MODIFIED THIS BLOCK TO CATCH -t
     else if (arg == "-s" || arg == "--screenshot" || 
-             arg == "-r" || arg == "--launcher") {
+             arg == "-r" || arg == "--launcher" ||
+             arg == "-t" || arg == "--thinkfan") {
         
         QDBusInterface iface("com.meismeric.luminate.UI", "/com/meismeric/luminate/UI", "com.meismeric.luminate.UI", QDBusConnection::sessionBus());
         if (!iface.isValid()) { std::cerr << "Error: Luminate Shell UI is not running." << std::endl; return 1; }
         
         if (arg == "-s" || arg == "--screenshot") iface.call("triggerScreenshotFlow");
         if (arg == "-r" || arg == "--launcher") iface.call("triggerLauncherFlow");
+        if (arg == "-t" || arg == "--thinkfan") iface.call("triggerFanFlow"); // ADDED
     }
     else if (arg == "-p" || arg == "--play-pause" || 
              arg == "-n" || arg == "--next" || 

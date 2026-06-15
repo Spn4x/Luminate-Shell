@@ -5,10 +5,14 @@ processed_files = qt6.preprocess(
     '../process/LauncherBackend.h',
     '../process/TopbarBackend.h',
     '../process/SystrayBackend.h',
-    '../process/AudioBackend.h'
+    '../process/AudioBackend.h',
+    '../process/FanBackend.h'
   ],
   qresources: 'resources.qrc'
 )
+
+# Native libsensors dependency for the Fan Backend
+sensors_dep = cpp.find_library('sensors', required: true)
 
 src_files = [
   'main.cpp',
@@ -18,12 +22,13 @@ src_files = [
   '../process/TopbarBackend.cpp',
   '../process/SystrayBackend.cpp',
   '../process/AudioBackend.cpp',
+  '../process/FanBackend.cpp',
   processed_files
 ]
 
 executable('luminate-edges',
   src_files,
-  dependencies: [qt_deps, layershell_dep, gio_dep],
+  dependencies: [qt_deps, layershell_dep, gio_dep, sensors_dep],
   install: true,
   install_dir: get_option('bindir')
 )

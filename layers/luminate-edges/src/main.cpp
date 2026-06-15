@@ -16,6 +16,7 @@
 #include "../process/TopbarBackend.h"
 #include "../process/SystrayBackend.h"
 #include "../process/AudioBackend.h"
+#include "../process/FanBackend.h"
 
 int main(int argc, char *argv[])
 {
@@ -33,12 +34,14 @@ int main(int argc, char *argv[])
     TopbarBackend topbarBackend;
     SystrayBackend systrayBackend;
     AudioBackend audioBackend;
+    FanBackend fanBackend;
 
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Backend", &backend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Launcher", &launcherBackend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Topbar", &topbarBackend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Systray", &systrayBackend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "AudioBackend", &audioBackend);
+    qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "FanBackend", &fanBackend);
     qmlRegisterType<ScreenshotCanvas>("Luminate.Shell", 1, 0, "ScreenshotCanvas");
 
     QQmlApplicationEngine engine;
@@ -57,31 +60,37 @@ int main(int argc, char *argv[])
             QRegion mask;
             LayerShellQt::Window *lsWindow = LayerShellQt::Window::get(window);
 
-            static QString lastMode = "";
             QString currentMode = backend.displayMode();
             
-            bool needsFocus = (currentMode == "screenshot_edit" || currentMode == "launcher" || currentMode == "wallpaper");
-            bool hadFocus = (lastMode == "screenshot_edit" || lastMode == "launcher" || lastMode == "wallpaper");
+            QQuickItem* audioOverlay = qobject_cast<QQuickItem*>(rootObject->findChild<QObject*>("audioMenuOverlay"));
+            QQuickItem* pulltabMenu = qobject_cast<QQuickItem*>(edge->findChild<QObject*>("pulltabMenu"));
+
+            bool hasFullscreenOverlay = false;
+            
+            // THE FIX: Use height > 0 to natively guarantee we know when the menu opens
+            bool isMenuOpen = (pulltabMenu && pulltabMenu->height() > 0);
+            
+            if (audioOverlay && audioOverlay->isVisible()) hasFullscreenOverlay = true;
+            if (isMenuOpen) hasFullscreenOverlay = true;
+
+            // THE FIX: Demand Keyboard Focus if the pulltabMenu is open
+            bool needsFocus = (currentMode == "screenshot_edit" || currentMode == "launcher" || currentMode == "wallpaper" || currentMode == "fan" || isMenuOpen);
+            static bool hadFocus = false;
             
             if (needsFocus && !hadFocus) {
                 lsWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityExclusive);
                 window->requestActivate();
+                hadFocus = true;
             } else if (!needsFocus && hadFocus) {
                 lsWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
+                hadFocus = false;
             }
-            lastMode = currentMode;
-
-            bool hasFullscreenOverlay = false;
-            
-            QQuickItem* audioOverlay = qobject_cast<QQuickItem*>(rootObject->findChild<QObject*>("audioMenuOverlay"));
-            if (audioOverlay && audioOverlay->isVisible()) hasFullscreenOverlay = true;
-
-            QQuickItem* pulltabMenu = qobject_cast<QQuickItem*>(edge->findChild<QObject*>("pulltabMenu"));
-            if (pulltabMenu && pulltabMenu->property("expanded").toBool()) hasFullscreenOverlay = true;
 
             if (hasFullscreenOverlay) {
+                // Take over the entire screen for clicks
                 mask += QRegion(0, 0, window->width(), window->height());
             } else {
+                // Only take over the bottom bar
                 QQuickItem* barBg = qobject_cast<QQuickItem*>(edge->findChild<QObject*>("barBg"));
                 if (barBg && barBg->opacity() > 0.01) {
                     QRectF barRect = barBg->mapRectToScene(QRectF(0, 0, barBg->width(), barBg->height()));
@@ -109,8 +118,6 @@ int main(int argc, char *argv[])
         if (barBg) {
             QObject::connect(barBg, &QQuickItem::widthChanged, window, updateInputMask);
             QObject::connect(barBg, &QQuickItem::heightChanged, window, updateInputMask);
-            QObject::connect(barBg, &QQuickItem::xChanged, window, updateInputMask);
-            QObject::connect(barBg, &QQuickItem::yChanged, window, updateInputMask);
         }
 
         QQuickItem* pulltabMenu = qobject_cast<QQuickItem*>(edge->findChild<QObject*>("pulltabMenu"));
@@ -124,17 +131,11 @@ int main(int argc, char *argv[])
         }
 
         QObject::connect(&backend, &NotificationBackend::displayModeChanged, window, updateInputMask);
-        
         updateInputMask();
 
         LayerShellQt::Window *lsWindow = LayerShellQt::Window::get(window);
         lsWindow->setLayer(LayerShellQt::Window::LayerOverlay);
-        lsWindow->setAnchors(static_cast<LayerShellQt::Window::Anchors>(
-            LayerShellQt::Window::AnchorTop | 
-            LayerShellQt::Window::AnchorBottom | 
-            LayerShellQt::Window::AnchorLeft | 
-            LayerShellQt::Window::AnchorRight
-        ));
+        lsWindow->setAnchors(static_cast<LayerShellQt::Window::Anchors>(LayerShellQt::Window::AnchorTop | LayerShellQt::Window::AnchorBottom | LayerShellQt::Window::AnchorLeft | LayerShellQt::Window::AnchorRight));
         lsWindow->setExclusiveZone(0);
         lsWindow->setMargins(QMargins(0, 0, 0, 0)); 
         window->setVisible(true);

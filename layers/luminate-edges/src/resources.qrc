@@ -12,8 +12,8 @@
         <file alias="qml/ScreenshotEditor.qml">../qml/ScreenshotEditor.qml</file>
         <file alias="qml/LauncherUI.qml">../qml/LauncherUI.qml</file>
         <file alias="qml/WallpaperChooser.qml">../qml/WallpaperChooser.qml</file>
+        <file alias="qml/FanManager.qml">../qml/FanManager.qml</file>
         
-        <!-- Renamed to prevent C++ Singleton Collisions -->
         <file alias="qml/ClockModule.qml">../qml/ClockModule.qml</file>
         <file alias="qml/SysinfoModule.qml">../qml/SysinfoModule.qml</file>
         <file alias="qml/AudioModule.qml">../qml/AudioModule.qml</file>

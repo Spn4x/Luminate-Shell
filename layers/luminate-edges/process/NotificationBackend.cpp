@@ -71,7 +71,6 @@ NotificationBackend::NotificationBackend(QObject *parent) : QObject(parent) {
                 m_currentResolution = props["currentResolution"].toString();
                 emit currentResolutionChanged();
             }
-            // THE FIX: Parse the palette upon UI load
             if (props.contains("wallpaperPalette")) {
                 m_wallpaperPalette = props["wallpaperPalette"].toStringList();
                 emit wallpaperPaletteChanged();
@@ -91,7 +90,7 @@ void NotificationBackend::onSurfaceDeskPropsChanged(const QString &interface, co
     bool changedPicking = false;
     bool changedList = false;
     bool changedResolution = false;
-    bool changedPalette = false; // THE FIX
+    bool changedPalette = false;
 
     if (changed.contains("themeMap")) {
         QVariant val = changed["themeMap"];
@@ -119,7 +118,6 @@ void NotificationBackend::onSurfaceDeskPropsChanged(const QString &interface, co
         m_currentResolution = changed["currentResolution"].toString();
         changedResolution = true;
     }
-    // THE FIX: Parse palette dynamically from signals
     if (changed.contains("wallpaperPalette")) {
         m_wallpaperPalette = changed["wallpaperPalette"].toStringList();
         changedPalette = true;
@@ -134,7 +132,7 @@ void NotificationBackend::onSurfaceDeskPropsChanged(const QString &interface, co
     }
     if (changedList) emit wallpaperListChanged();
     if (changedResolution) emit currentResolutionChanged();
-    if (changedPalette) emit wallpaperPaletteChanged(); // THE FIX: Fire the event for QML
+    if (changedPalette) emit wallpaperPaletteChanged(); 
 }
 
 void NotificationBackend::updateSystemInfo() {
@@ -393,7 +391,7 @@ void NotificationBackend::fetchDuration() {
 }
 
 void NotificationBackend::TriggerMediaPeek() {
-    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper) return; 
+    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper || m_isShowingFan) return; 
     
     m_displayMode = "media";
     emit displayModeChanged();
@@ -401,7 +399,7 @@ void NotificationBackend::TriggerMediaPeek() {
 }
 
 void NotificationBackend::TriggerSystemPeek() {
-    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper || hasMedia()) return;
+    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper || hasMedia() || m_isShowingFan) return;
     
     updateSystemInfo();
     m_isShowingSystem = true;
@@ -422,7 +420,7 @@ void NotificationBackend::processNext() {
 }
 
 void NotificationBackend::readyForNext() {
-    if (m_displayMode == "screenshot_info" || m_displayMode == "screenshot_edit" || m_displayMode == "launcher" || m_displayMode == "wallpaper") {
+    if (m_displayMode == "screenshot_info" || m_displayMode == "screenshot_edit" || m_displayMode == "launcher" || m_displayMode == "wallpaper" || m_displayMode == "fan") {
         return; 
     }
     
@@ -455,6 +453,8 @@ void NotificationBackend::updateDisplayMode() {
 
     if (m_isShowingLauncher) {
         m_displayMode = "launcher";
+    } else if (m_isShowingFan) {
+        m_displayMode = "fan";
     } else if (m_isPickingWallpaper) { 
         m_displayMode = "wallpaper";
     } else if (m_screenshotState == "info") {
@@ -481,7 +481,7 @@ void NotificationBackend::updateDisplayMode() {
         emit displayModeChanged();
         if (m_displayMode == "idle") emit requestHide();
         else emit requestShow(); 
-    } else if (m_displayMode == "notification" || m_displayMode == "osd" || m_displayMode == "launcher" || m_displayMode == "system" || m_displayMode == "wallpaper") {
+    } else if (m_displayMode == "notification" || m_displayMode == "osd" || m_displayMode == "launcher" || m_displayMode == "system" || m_displayMode == "wallpaper" || m_displayMode == "fan") {
         emit requestShow(); 
     } else if (m_displayMode == "idle") {
         emit requestHide(); 
@@ -749,6 +749,16 @@ void NotificationBackend::triggerLauncherFlow() {
 
 void NotificationBackend::closeLauncher() {
     m_isShowingLauncher = false;
+    updateDisplayMode();
+}
+
+void NotificationBackend::triggerFanFlow() {
+    m_isShowingFan = true;
+    updateDisplayMode();
+}
+
+void NotificationBackend::closeFan() {
+    m_isShowingFan = false;
     updateDisplayMode();
 }
 

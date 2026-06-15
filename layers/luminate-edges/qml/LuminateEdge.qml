@@ -31,7 +31,7 @@ Item {
     }
 
     property string activeState: {
-        if (Backend.displayMode === "launcher" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "wallpaper") {
+        if (Backend.displayMode === "launcher" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") {
             return "expanded";
         }
         if (isPinned) {
@@ -72,7 +72,10 @@ Item {
                 return AppTheme.screenshotEditWidth || 1100;
             }
             if (Backend.displayMode === "wallpaper") {
-                return 700; // THE FIX: Compact Width
+                return 700;
+            }
+            if (Backend.displayMode === "fan") {
+                return 640; // THE FIX: Wide 16:9 layout
             }
             return AppTheme.expandedMinWidth || 420;
         }
@@ -105,7 +108,10 @@ Item {
                 return AppTheme.screenshotEditHeight || 620;
             }
             if (Backend.displayMode === "wallpaper") {
-                return 170; // THE FIX: Compact Height
+                return 170;
+            }
+            if (Backend.displayMode === "fan") {
+                return 330; // THE FIX: Tightly hugs the slider, no dead space!
             }
             if (Backend.displayMode === "notification") {
                 return edgeHelper.notifHeight + 32;
@@ -185,12 +191,22 @@ Item {
         width: Window.window ? Window.window.width : Screen.width
         height: Window.window ? Window.window.height : Screen.height
         z: -10 
-        enabled: pulltabMenu.expanded
+        enabled: pulltabMenu.expanded || Backend.displayMode === "fan"
         
         onClicked: {
-            root.requestedTrayBusName = "";
-            pulltabMenu.expanded = false;
+            if (Backend.displayMode === "fan") {
+                Backend.closeFan();
+            } else {
+                root.requestedTrayBusName = "";
+                pulltabMenu.expanded = false;
+            }
         }
+    }
+
+    Shortcut {
+        sequence: "Escape"
+        enabled: Backend.displayMode === "fan"
+        onActivated: Backend.closeFan()
     }
 
     Connections {
@@ -503,7 +519,7 @@ Item {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 
                 onClicked: (mouse) => {
-                    if (Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper") {
+                    if (Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") {
                         return;
                     }
                     Backend.isExpanded = false;
@@ -543,6 +559,12 @@ Item {
                 anchors.fill: parent
                 visible: Backend.displayMode === "wallpaper"
             }
+
+            FanManager {
+                id: fanModule
+                anchors.fill: parent
+                visible: Backend.displayMode === "fan"
+            }
         }
     }
 
@@ -553,7 +575,7 @@ Item {
             return;
         }
 
-        if (activeState === "expanded" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper") {
+        if (activeState === "expanded" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") {
             return;
         }
         if (pulltabMenu.expanded) {
@@ -602,7 +624,7 @@ Item {
             if (Backend.displayMode === "osd") root.startTimer(); 
         }
         function onDisplayModeChanged() {
-            if (Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper") { 
+            if (Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") { 
                 autoDismissTimer.stop(); 
                 if (Backend.displayMode === "launcher") launcherModule.openAndFocus(); 
                 return; 

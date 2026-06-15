@@ -73,7 +73,12 @@ Item {
     }
 
     onExpandedChanged: {
-        if (!expanded) openSubmenus = {};
+        if (!expanded) {
+            openSubmenus = {};
+        } else {
+            // THE FIX: Force keyboard focus to this Item so the Escape Shortcut can fire
+            pulltabRoot.forceActiveFocus();
+        }
     }
 
     Rectangle {
@@ -91,6 +96,10 @@ Item {
         MouseArea { 
             anchors.fill: parent
             hoverEnabled: true 
+            preventStealing: true
+            onPressed: (mouse) => { mouse.accepted = true; }
+            onReleased: (mouse) => { mouse.accepted = true; }
+            onClicked: (mouse) => { mouse.accepted = true; }
         }
     }
 
@@ -199,10 +208,10 @@ Item {
                     }
                 }
 
-                SettingsBtn { iconStr: ""; labelStr: "Launcher"; cmdStr: "luminate-shell --toggle edge -l" }
-                SettingsBtn { iconStr: ""; labelStr: "Screenshot"; cmdStr: "luminate-shell --toggle edge -s" }
-                SettingsBtn { iconStr: ""; labelStr: "Wallpaper"; cmdStr: "luminate-shell --toggle surfacedesk -w" }
-                SettingsBtn { iconStr: ""; labelStr: "Edit Desk"; cmdStr: "luminate-shell --toggle surfacedesk -e" }
+                SettingsBtn { iconStr: ""; labelStr: "Launcher"; cmdStr: "luminate-shell -r" }
+                SettingsBtn { iconStr: ""; labelStr: "Screenshot"; cmdStr: "luminate-shell -s" }
+                SettingsBtn { iconStr: ""; labelStr: "Wallpaper"; cmdStr: "luminate-shell -w" }
+                SettingsBtn { iconStr: "󰈐"; labelStr: "Thinkfan"; cmdStr: "luminate-shell -t" } 
             }
 
             Text { 
@@ -218,7 +227,7 @@ Item {
                 columnSpacing: 8
                 rowSpacing: 8
                 
-                SettingsBtn { iconStr: ""; labelStr: "Lock"; cmdStr: "luminate-shell --toggle surfacedesk -l" }
+                SettingsBtn { iconStr: ""; labelStr: "Lock"; cmdStr: "luminate-shell -l" }
                 SettingsBtn { iconStr: "󰍃"; labelStr: "Log Out"; cmdStr: "hyprctl dispatch exit" }
                 SettingsBtn { iconStr: "󰒲"; labelStr: "Sleep"; cmdStr: "systemctl suspend" }
                 SettingsBtn { iconStr: ""; labelStr: "Reboot"; cmdStr: "systemctl reboot" }
@@ -374,7 +383,6 @@ Item {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             
-                            // THE FIX: Explicitly call closeNotification instead of readyForNext()
                             onClicked: { 
                                 Backend.invokeAction(modelData.id); 
                                 Backend.closeNotification(); 
@@ -407,7 +415,6 @@ Item {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     
-                    // THE FIX: Explicitly call closeNotification instead of readyForNext()
                     onClicked: { 
                         Backend.closeNotification(); 
                         pulltabRoot.expanded = false; 
