@@ -30,14 +30,24 @@ Item {
         down: false
     }
 
+    // Launcher and Screenshot Edit get absolute priority over isPinned
     property string activeState: {
-        if (Backend.displayMode === "launcher" || Backend.displayMode === "screenshot_edit" || Backend.isExpanded) {
+        if (Backend.displayMode === "launcher" || Backend.displayMode === "screenshot_edit") {
+            return "expanded";
+        }
+        if (isPinned) {
+            if (Backend.displayMode === "osd") {
+                return "pill";
+            }
+            return "statusbar";
+        }
+        if (Backend.isExpanded) {
             return "expanded";
         }
         if (Backend.displayMode === "notification" || Backend.displayMode === "media" || Backend.displayMode === "osd" || Backend.displayMode === "privacy" || Backend.displayMode === "screenshot_info") {
             return "pill";
         }
-        if (isPinned || isPeeking || pulltabMenu.expanded || Backend.displayMode === "system") {
+        if (isPeeking || pulltabMenu.expanded || Backend.displayMode === "system") {
             return "statusbar";
         }
         return "passive";
@@ -56,17 +66,27 @@ Item {
     
     property int totalWidth: {
         if (activeState === "expanded") {
-            if (Backend.displayMode === "launcher") return AppTheme.launcherWidth || 420;
-            if (Backend.displayMode === "screenshot_edit") return AppTheme.screenshotEditWidth || 1100;
+            if (Backend.displayMode === "launcher") {
+                return AppTheme.launcherWidth || 420;
+            }
+            if (Backend.displayMode === "screenshot_edit") {
+                return AppTheme.screenshotEditWidth || 1100;
+            }
             return AppTheme.expandedMinWidth || 420;
         }
         if (activeState === "statusbar") {
-            return statusBar.implicitWidth || 600;
+            return statusBar.implicitWidth;
         }
         if (activeState === "pill") {
-            if (Backend.displayMode === "screenshot_info") return 220;
-            if (Backend.displayMode === "osd") return 290;
-            if (Backend.displayMode === "media") return Math.max(AppTheme.sideInfoMinWidth || 250, (mediaPillComponent ? mediaPillComponent.pinnedContentWidth : 0) + 64);
+            if (Backend.displayMode === "screenshot_info") {
+                return 220;
+            }
+            if (Backend.displayMode === "osd") {
+                return 290;
+            }
+            if (Backend.displayMode === "media") {
+                return Math.max(AppTheme.sideInfoMinWidth || 250, (mediaPillComponent ? mediaPillComponent.pinnedContentWidth : 0) + 64);
+            }
             
             let dotSpace = Backend.displayMode === "privacy" ? 20 : 0;
             return Math.max(AppTheme.sideInfoMinWidth || 250, solidTitleText.implicitWidth + dotSpace + 48);
@@ -102,7 +122,7 @@ Item {
     onIsPinnedChanged: { 
         if (isPinned) { 
             pinGlowAnim.restart(); 
-            autoDismissTimer.stop(); 
+            root.startTimer(); 
         } else { 
             root.startTimer(); 
         } 
@@ -110,9 +130,21 @@ Item {
 
     SequentialAnimation {
         id: pinGlowAnim
-        ColorAnimation { target: barBg; property: "border.color"; to: AppTheme.accent; duration: 200 }
-        PauseAnimation { duration: 600 }
-        ColorAnimation { target: barBg; property: "border.color"; to: AppTheme.borderAlpha; duration: 400 }
+        ColorAnimation { 
+            target: barBg
+            property: "border.color"
+            to: AppTheme.accent
+            duration: 200 
+        }
+        PauseAnimation { 
+            duration: 600 
+        }
+        ColorAnimation { 
+            target: barBg
+            property: "border.color"
+            to: AppTheme.borderAlpha
+            duration: 400 
+        }
     }
 
     PulltabMenu {
@@ -124,6 +156,7 @@ Item {
         onExpandedChanged: {
             if (!expanded) {
                 root.requestedTrayBusName = "";
+                root.startTimer();
             }
         }
     }
@@ -190,18 +223,21 @@ Item {
         bottomLeftRadius: 0
         bottomRightRadius: 0
         
-        Behavior on width { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
-        Behavior on height { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
-        Behavior on currentRadius { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
+        Behavior on width { 
+            NumberAnimation { duration: 350; easing.type: Easing.OutCubic } 
+        }
+        Behavior on height { 
+            NumberAnimation { duration: 350; easing.type: Easing.OutCubic } 
+        }
+        Behavior on currentRadius { 
+            NumberAnimation { duration: 350; easing.type: Easing.OutCubic } 
+        }
 
         color: AppTheme.bg
         border.color: root.isPinned ? AppTheme.borderAlpha : (activeState === "passive" ? "transparent" : AppTheme.borderAlpha)
         border.width: activeState === "passive" ? 0 : 2 
         clip: true 
 
-        // THE FIX: Removed the activeState restriction.
-        // This patch paints over the bottom border with the background color 
-        // to make the bar sit perfectly flush against the bottom of the screen in ALL states.
         Rectangle {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
@@ -228,8 +264,12 @@ Item {
                 onClicked: (mouse) => {
                     if (mouse.button === Qt.RightButton) {
                         if (activeState === "pill") {
-                            if (Backend.displayMode === "privacy" || Backend.displayMode === "screenshot_info") return;
-                            if (Backend.displayMode === "media") Backend.setMediaPinned(false);
+                            if (Backend.displayMode === "privacy" || Backend.displayMode === "screenshot_info") {
+                                return;
+                            }
+                            if (Backend.displayMode === "media") {
+                                Backend.setMediaPinned(false);
+                            }
                             Backend.readyForNext();
                             return;
                         }
@@ -239,13 +279,22 @@ Item {
                     }
                     if (mouse.button === Qt.LeftButton) {
                         if (activeState === "passive") {
-                            if (Backend.hasMedia) Backend.TriggerMediaPeek();
-                            else { root.isPeeking = true; root.startTimer(); }
+                            if (Backend.hasMedia) {
+                                Backend.TriggerMediaPeek();
+                            } else { 
+                                root.isPeeking = true; 
+                                root.startTimer(); 
+                            }
                             return;
                         }
                         if (activeState === "pill") {
-                            if (Backend.displayMode === "osd") return;
-                            if (Backend.displayMode === "screenshot_info") { Backend.expandScreenshotToEdit(); return; }
+                            if (Backend.displayMode === "osd") {
+                                return;
+                            }
+                            if (Backend.displayMode === "screenshot_info") { 
+                                Backend.expandScreenshotToEdit(); 
+                                return; 
+                            }
                             Backend.isExpanded = true; 
                             return;
                         }
@@ -262,13 +311,21 @@ Item {
                 anchors.fill: parent
                 opacity: activeState === "passive" ? 1 : 0
                 visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 150 } }
+                
+                Behavior on opacity { 
+                    NumberAnimation { duration: 150 } 
+                }
                 
                 Rectangle { 
                     anchors.centerIn: parent
-                    width: 40; height: 4; radius: 2
+                    width: 40
+                    height: 4
+                    radius: 2
                     color: Backend.displayMode !== "idle" ? AppTheme.accent : "#55ffffff"
-                    Behavior on color { ColorAnimation { duration: 200 } } 
+                    
+                    Behavior on color { 
+                        ColorAnimation { duration: 200 } 
+                    } 
                 }
             }
 
@@ -278,11 +335,13 @@ Item {
                 height: parent.height
                 opacity: activeState === "statusbar" ? 1 : 0
                 visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 150 } }
+                
+                Behavior on opacity { 
+                    NumberAnimation { duration: 150 } 
+                }
 
                 showPortal: false
                 isPinned: root.isPinned
-                
                 activeTrayBusName: pulltabMenu.expanded && pulltabMenu.mode === "tray" ? pulltabMenu.activeBusName : ""
                 
                 onCloseDropdownRequested: {
@@ -324,6 +383,20 @@ Item {
                         root.startTimer();
                     }
                 }
+                
+                onIndicatorClicked: (type, targetItem) => {
+                    if (pulltabMenu.expanded && pulltabMenu.mode === type) {
+                        pulltabMenu.expanded = false;
+                    } else {
+                        let p = targetItem.mapToItem(root, targetItem.width / 2, 0);
+                        pulltabMenu.targetX = p.x - (pulltabMenu.baseWidth / 2);
+                        pulltabMenu.mode = type;
+                        pulltabMenu.expanded = true;
+                        
+                        root.isPeeking = true;
+                        root.startTimer();
+                    }
+                }
             }
 
             Item {
@@ -331,45 +404,108 @@ Item {
                 anchors.fill: parent
                 opacity: activeState === "pill" ? 1 : 0
                 visible: opacity > 0
-                Behavior on opacity { NumberAnimation { duration: 150 } }
+                
+                Behavior on opacity { 
+                    NumberAnimation { duration: 150 } 
+                }
 
                 Item {
                     anchors.fill: parent
                     visible: Backend.displayMode === "osd"
+                    
                     Row {
-                        anchors.centerIn: parent; spacing: 14
-                        SystemIcon { anchors.verticalCenter: parent.verticalCenter; iconName: Backend.osdIcon; iconColor: AppTheme.fg; size: 26 }
+                        anchors.centerIn: parent
+                        spacing: 14
+                        
+                        SystemIcon { 
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconName: Backend.osdIcon
+                            iconColor: AppTheme.fg
+                            size: 26 
+                        }
+                        
                         Rectangle {
-                            anchors.verticalCenter: parent.verticalCenter; width: 200; height: 10; radius: 5; color: Qt.rgba(1, 1, 1, 0.2)
-                            Rectangle { width: Math.min(Backend.osdLevel || 0, 1.0) * parent.width; height: parent.height; radius: 5; color: AppTheme.fg
-                                Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } } 
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 200
+                            height: 10
+                            radius: 5
+                            color: Qt.rgba(1, 1, 1, 0.2)
+                            
+                            Rectangle { 
+                                width: Math.min(Backend.osdLevel || 0, 1.0) * parent.width
+                                height: parent.height
+                                radius: 5
+                                color: AppTheme.fg
+                                
+                                Behavior on width { 
+                                    NumberAnimation { duration: 150; easing.type: Easing.OutCubic } 
+                                } 
                             }
                         }
-                        Text { anchors.verticalCenter: parent.verticalCenter; visible: Backend.osdLevel > 1.0; text: "+" + Math.round(((Backend.osdLevel || 1.0) - 1.0) * 100) + "%"; color: AppTheme.fg; font.pixelSize: 13; font.bold: true }
+                        
+                        Text { 
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: Backend.osdLevel > 1.0
+                            text: "+" + Math.round(((Backend.osdLevel || 1.0) - 1.0) * 100) + "%"
+                            color: AppTheme.fg
+                            font.pixelSize: 13
+                            font.bold: true 
+                        }
                     }
                 }
 
                 Item {
                     anchors.fill: parent
                     visible: Backend.displayMode === "notification" || Backend.displayMode === "privacy" || Backend.displayMode === "screenshot_info"
+                    
                     Row {
-                        anchors.centerIn: parent; spacing: 8
-                        Rectangle { visible: Backend.displayMode === "privacy"; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: Backend.privacyHasCam ? AppTheme.colorCam : AppTheme.colorMic }
-                        SystemIcon { visible: Backend.displayMode === "screenshot_info"; iconName: "camera-photo-symbolic"; size: 24; anchors.verticalCenter: parent.verticalCenter }
+                        anchors.centerIn: parent
+                        spacing: 8
+                        
+                        Rectangle { 
+                            visible: Backend.displayMode === "privacy"
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 10
+                            height: 10
+                            radius: 5
+                            color: Backend.privacyHasCam ? AppTheme.colorCam : AppTheme.colorMic 
+                        }
+                        
+                        SystemIcon { 
+                            visible: Backend.displayMode === "screenshot_info"
+                            iconName: "camera-photo-symbolic"
+                            size: 24
+                            anchors.verticalCenter: parent.verticalCenter 
+                        }
+                        
                         Text { 
-                            id: solidTitleText; anchors.verticalCenter: parent.verticalCenter
+                            id: solidTitleText
+                            anchors.verticalCenter: parent.verticalCenter
                             text: { 
-                                if (Backend.displayMode === "screenshot_info") return "Screenshot Captured"; 
-                                if (Backend.displayMode === "notification") return Backend.summary; 
-                                if (Backend.displayMode === "privacy") return Backend.privacySummary; 
+                                if (Backend.displayMode === "screenshot_info") {
+                                    return "Screenshot Captured"; 
+                                }
+                                if (Backend.displayMode === "notification") {
+                                    return Backend.summary; 
+                                }
+                                if (Backend.displayMode === "privacy") {
+                                    return Backend.privacySummary; 
+                                }
                                 return ""; 
                             }
-                            color: AppTheme.fg; font.pixelSize: AppTheme.summarySize; font.bold: true 
+                            color: AppTheme.fg
+                            font.pixelSize: AppTheme.summarySize
+                            font.bold: true 
                         }
                     }
                 }
                 
-                Player { id: mediaPillComponent; anchors.fill: parent; isExpanded: false; visible: Backend.displayMode === "media" }
+                Player { 
+                    id: mediaPillComponent
+                    anchors.fill: parent
+                    isExpanded: false
+                    visible: Backend.displayMode === "media" 
+                }
             }
         }
 
@@ -378,39 +514,81 @@ Item {
             anchors.fill: parent
             opacity: activeState === "expanded" ? 1 : 0
             visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: 150 } }
+            
+            Behavior on opacity { 
+                NumberAnimation { duration: 150 } 
+            }
 
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
+                
                 onClicked: (mouse) => {
-                    if (Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher") return;
+                    if (Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher") {
+                        return;
+                    }
                     Backend.isExpanded = false;
-                    if (mouse.button === Qt.LeftButton && Backend.displayMode === "notification" && !Backend.hasActions) Backend.invokeAction("default");
+                    if (mouse.button === Qt.LeftButton && Backend.displayMode === "notification" && !Backend.hasActions) {
+                        Backend.invokeAction("default");
+                    }
                     Backend.readyForNext();
                 }
             }
 
-            EdgeHelper { id: edgeHelper }
-            Player { id: mediaComponent; anchors.fill: parent; isExpanded: true; visible: Backend.displayMode === "media" }
-            ScreenshotEditor { id: qscreenEditor; anchors.fill: parent; visible: Backend.displayMode === "screenshot_edit" }
+            EdgeHelper { 
+                id: edgeHelper 
+            }
             
-            // THE FIX (Part 2): Made sure the launcher module is visually detached slightly 
-            // from the bottom border using anchors.margins: 5 so it floats cleanly inside the panel.
-            LauncherUI { id: launcherModule; anchors.fill: parent; anchors.margins: 5; visible: Backend.displayMode === "launcher" }
+            Player { 
+                id: mediaComponent
+                anchors.fill: parent
+                isExpanded: true
+                visible: Backend.displayMode === "media" 
+            }
+            
+            ScreenshotEditor { 
+                id: qscreenEditor
+                anchors.fill: parent
+                visible: Backend.displayMode === "screenshot_edit" 
+            }
+            
+            LauncherUI { 
+                id: launcherModule
+                anchors.fill: parent
+                anchors.margins: 5
+                visible: Backend.displayMode === "launcher" 
+            }
         }
     }
 
     function startTimer() {
         autoDismissTimer.stop();
-        if (isPinned || activeState === "expanded" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher") return;
-        if (Backend.mediaPinned && Backend.displayMode === "media" && Backend.mediaStatus === "Playing") return;
         
-        if (Backend.displayMode === "screenshot_info") autoDismissTimer.interval = 10000;
-        else if (Backend.displayMode === "osd") autoDismissTimer.interval = 1500;
-        else if (Backend.displayMode === "media") autoDismissTimer.interval = 6000;
-        else if (isPeeking || pulltabMenu.expanded) autoDismissTimer.interval = 6000;
-        else autoDismissTimer.interval = 4000;
+        // THE BUG FIX: If the bar is pinned, dots are PERSISTENT.
+        // We completely skip starting the timer, unless it's a volume popup.
+        if (isPinned && Backend.displayMode !== "osd") {
+            return;
+        }
+
+        if (activeState === "expanded" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher") {
+            return;
+        }
+        if (pulltabMenu.expanded) {
+            return; 
+        }
+        if (Backend.mediaPinned && Backend.displayMode === "media" && Backend.mediaStatus === "Playing") {
+            return;
+        }
+        
+        if (Backend.displayMode === "screenshot_info") {
+            autoDismissTimer.interval = 10000;
+        } else if (Backend.displayMode === "osd") {
+            autoDismissTimer.interval = 1500;
+        } else if (Backend.displayMode === "media") {
+            autoDismissTimer.interval = 6000;
+        } else {
+            autoDismissTimer.interval = 4000;
+        }
         
         autoDismissTimer.restart();
     }
@@ -420,19 +598,40 @@ Item {
         onTriggered: {
             root.isPeeking = false;
             pulltabMenu.expanded = false;
-            if (Backend.displayMode === "screenshot_info") Backend.cancelScreenshot();
-            else if (Backend.displayMode !== "idle") Backend.readyForNext();
+            
+            if (Backend.displayMode === "screenshot_info") {
+                Backend.cancelScreenshot();
+            } else if (Backend.displayMode !== "idle") {
+                Backend.readyForNext();
+            }
         }
     }
 
     Connections {
         target: Backend
-        function onRequestShow() { root.startTimer(); }
-        function onRequestHide() { autoDismissTimer.stop(); pulltabMenu.expanded = false; root.isPeeking = false; }
-        function onOsdChanged() { if (Backend.displayMode === "osd") root.startTimer(); }
+        function onRequestShow() { 
+            root.startTimer(); 
+        }
+        function onRequestHide() { 
+            autoDismissTimer.stop(); 
+            pulltabMenu.expanded = false; 
+            root.isPeeking = false; 
+        }
+        function onOsdChanged() { 
+            if (Backend.displayMode === "osd") {
+                root.startTimer(); 
+            }
+        }
         function onDisplayModeChanged() {
-            if (Backend.displayMode === "launcher") { autoDismissTimer.stop(); launcherModule.openAndFocus(); return; }
-            if (Backend.displayMode === "screenshot_edit" || (Backend.displayMode === "media" && Backend.mediaPinned)) { autoDismissTimer.stop(); return; }
+            if (Backend.displayMode === "launcher") { 
+                autoDismissTimer.stop(); 
+                launcherModule.openAndFocus(); 
+                return; 
+            }
+            if (Backend.displayMode === "screenshot_edit" || (Backend.displayMode === "media" && Backend.mediaPinned)) { 
+                autoDismissTimer.stop(); 
+                return; 
+            }
             root.startTimer();
         }
     }

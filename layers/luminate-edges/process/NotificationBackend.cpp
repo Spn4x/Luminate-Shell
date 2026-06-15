@@ -4,7 +4,7 @@
 #include <QDBusReply>
 #include <QDBusPendingCallWatcher>
 #include <QDBusVariant>
-#include <QDBusArgument> // <-- Added for unpacking
+#include <QDBusArgument>
 #include <QDBusMetaType>
 #include <QDebug>
 #include <QDir>
@@ -29,15 +29,12 @@ NotificationBackend::NotificationBackend(QObject *parent) : QObject(parent) {
     connect(&m_positionTimer, &QTimer::timeout, this, &NotificationBackend::fetchPosition);
     m_positionTimer.start(1000);
 
-    // D-Bus Internal Theming Setup
     bus.connect(
         "com.meismeric.SurfaceDesk", "/com/meismeric/SurfaceDesk",
         "org.freedesktop.DBus.Properties", "PropertiesChanged",
         this, SLOT(onSurfaceDeskPropsChanged(QString, QVariantMap, QStringList))
     );
 
-    // Fetch Initial Theme
-    qDebug() << "[Edges] Booting up. Fetching initial ThemeMap from SurfaceDesk...";
     QDBusMessage msg = QDBusMessage::createMethodCall("com.meismeric.SurfaceDesk", "/com/meismeric/SurfaceDesk", "org.freedesktop.DBus.Properties", "Get");
     msg << "com.meismeric.SurfaceDesk" << "themeMap";
     
@@ -46,17 +43,13 @@ NotificationBackend::NotificationBackend(QObject *parent) : QObject(parent) {
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
         QDBusPendingReply<QDBusVariant> reply = *w;
         if (reply.isValid()) {
-            // THE FIX: Correctly unpack the D-Bus Argument Envelope
             QVariant val = reply.value().variant();
             if (val.userType() == qMetaTypeId<QDBusArgument>()) {
                 m_themeData = qdbus_cast<QVariantMap>(val.value<QDBusArgument>());
             } else {
                 m_themeData = val.toMap();
             }
-            qDebug() << "[Edges] Success! Fetched initial ThemeMap:" << m_themeData;
             emit themeChanged();
-        } else {
-            qDebug() << "[Edges] Failed to fetch initial ThemeMap (SurfaceDesk probably booting up). Will wait for PropertiesChanged signal.";
         }
         w->deleteLater();
     });
@@ -66,14 +59,12 @@ void NotificationBackend::onSurfaceDeskPropsChanged(const QString &interface, co
     Q_UNUSED(interface);
     Q_UNUSED(invalidated);
     if (changed.contains("themeMap")) {
-        // THE FIX: Correctly unpack the D-Bus Argument Envelope
         QVariant val = changed["themeMap"];
         if (val.userType() == qMetaTypeId<QDBusArgument>()) {
             m_themeData = qdbus_cast<QVariantMap>(val.value<QDBusArgument>());
         } else {
             m_themeData = val.toMap();
         }
-        qDebug() << "[Edges] Caught PropertiesChanged signal! Updating ThemeMap:" << m_themeData;
         emit themeChanged();
     }
 }
@@ -350,11 +341,15 @@ void NotificationBackend::TriggerSystemPeek() {
     updateDisplayMode();
 }
 
+// THE FIX: Bulletproof Notification Queue state clearing.
 void NotificationBackend::processNext() {
     if (!m_queue.isEmpty() && !m_isShowingNotif) {
         m_current = m_queue.dequeue();
         m_isShowingNotif = true;
         emit queueChanged();
+        emit notificationChanged();
+    } else if (m_queue.isEmpty() && !m_isShowingNotif) {
+        m_current = NotificationData(); // Clears memory of old notification entirely
         emit notificationChanged();
     }
     updateDisplayMode();
@@ -380,6 +375,12 @@ void NotificationBackend::readyForNext() {
         return;
     }
     
+    processNext();
+}
+
+// THE FIX: Explicit pulltab dismissal override
+void NotificationBackend::closeNotification() {
+    m_isShowingNotif = false;
     processNext();
 }
 

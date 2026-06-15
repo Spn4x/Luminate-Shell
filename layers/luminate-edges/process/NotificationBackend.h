@@ -109,6 +109,7 @@ public:
 
     Q_INVOKABLE void invokeAction(const QString& actionId);
     Q_INVOKABLE void readyForNext();
+    Q_INVOKABLE void closeNotification(); // <-- ADDED: Explicit Notification dismissal
     
     Q_INVOKABLE void killPrivacyApp(uint pid, const QString& name);
     Q_INVOKABLE void ignorePrivacyApp(uint pid, const QString& name);
