@@ -10,7 +10,7 @@ QtObject {
     property color accent: theme["accent"] !== undefined ? theme["accent"] : "#00ffcc"
     property color surface: theme["surface"] !== undefined ? theme["surface"] : "#3E3E41"
     
-    // THE FIX: Solid, darker variants of the accent color for stacking (no opacity/alpha used!)
+    // Solid, darker variants of the accent color for stacking
     property color accentDark1: Qt.darker(accent, 1.25)
     property color accentDark2: Qt.darker(accent, 1.5)
     property color accentDark3: Qt.darker(accent, 1.8)
@@ -48,8 +48,9 @@ QtObject {
     property int expandedMinWidth: 420
     property int expandedMinHeight: 120
 
-    property int screenshotEditWidth: 1100
-    property int screenshotEditHeight: 620
+    // Initial fallback window boundaries for the screenshot tool 
+    property int screenshotEditWidth: 1115
+    property int screenshotEditHeight: 635
 
     property int launcherWidth: 420
     property int itemHeight: 56

@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
         updateInputMask();
 
         LayerShellQt::Window *lsWindow = LayerShellQt::Window::get(window);
-        lsWindow->setLayer(LayerShellQt::Window::LayerTop);
+        lsWindow->setLayer(LayerShellQt::Window::LayerOverlay);
         lsWindow->setAnchors(static_cast<LayerShellQt::Window::Anchors>(
             LayerShellQt::Window::AnchorTop | 
             LayerShellQt::Window::AnchorBottom | 

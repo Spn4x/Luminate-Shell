@@ -27,7 +27,6 @@ struct AnnItem {
     QString text;
     QImage image; 
     
-    // Performance Cache Tracking
     QRectF cachedRect;
     double cachedWidth = -1;
 };
@@ -45,6 +44,10 @@ class ScreenshotCanvas : public QQuickPaintedItem {
     Q_PROPERTY(double currentRotation READ currentRotation WRITE setCurrentRotation NOTIFY rotationChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(bool isTextSelected READ isTextSelected NOTIFY selectionChanged)
+
+    // NEW: Expose raw image dimensions to QML for dynamic window sizing
+    Q_PROPERTY(int imageWidth READ imageWidth NOTIFY imageLoaded)
+    Q_PROPERTY(int imageHeight READ imageHeight NOTIFY imageLoaded)
 
 public:
     ScreenshotCanvas(QQuickItem *parent = nullptr) : QQuickPaintedItem(parent) {
@@ -111,7 +114,6 @@ public:
         m_textSize = s;
         if (hasSelection() && m_annotations[m_selectedIndex].type == 5) {
             m_annotations[m_selectedIndex].width = s;
-            
             QFont font("sans-serif");
             font.setPixelSize(qMax(1, qRound(s)));
             font.setBold(true);
@@ -119,14 +121,12 @@ public:
             QRectF br = fm.boundingRect(m_annotations[m_selectedIndex].text);
             m_annotations[m_selectedIndex].rect.setWidth(br.width());
             m_annotations[m_selectedIndex].rect.setHeight(br.height());
-            
             update();
         }
         emit textSizeChanged();
     }
 
     double scaleFactor() const { return m_scale; }
-
     bool isInteracting() const { return m_isInteracting; }
     void setInteracting(bool val) { 
         if (m_isInteracting != val) { 
@@ -135,8 +135,15 @@ public:
         } 
     }
 
+    int imageWidth() const { return m_bgImage.width(); }
+    int imageHeight() const { return m_bgImage.height(); }
+
     Q_INVOKABLE void loadImage(const QString& path) {
         m_bgImage = QImage(path);
+        
+        // NEW: Tell QML the image is loaded so it can resize the window dynamically
+        emit imageLoaded(); 
+        
         updateScale();
         m_selectionRect = QRectF(0, 0, m_bgImage.width(), m_bgImage.height());
         m_annotations.clear();
@@ -156,7 +163,6 @@ public:
         if (m_bgImage.isNull()) return;
         const QClipboard *clipboard = QGuiApplication::clipboard();
         const QMimeData *mimeData = clipboard->mimeData();
-        
         double cx = m_bgImage.width() / 2.0;
         double cy = m_bgImage.height() / 2.0;
 
@@ -168,12 +174,10 @@ public:
                 if (img.width() > max_w || img.height() > max_h) {
                     img = img.scaled(max_w, max_h, Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 }
-                
                 AnnItem item;
                 item.type = 6;
                 item.image = img;
                 item.rect = QRectF(cx - img.width()/2.0, cy - img.height()/2.0, img.width(), img.height());
-                
                 m_redoStack.clear();
                 m_annotations.append(item);
                 setAnnMode(6);
@@ -190,15 +194,12 @@ public:
                 item.color = m_color;
                 item.width = m_textSize;
                 item.text = text;
-                
                 QFont font("sans-serif");
                 font.setPixelSize(qMax(1, qRound(m_textSize)));
                 font.setBold(true);
                 QFontMetricsF fm(font);
                 QRectF br = fm.boundingRect(text);
-                
                 item.rect = QRectF(cx - br.width()/2.0, cy - br.height()/2.0, br.width(), br.height());
-                
                 m_redoStack.clear();
                 m_annotations.append(item);
                 setAnnMode(6);
@@ -217,14 +218,12 @@ public:
         item.color = m_color;
         item.width = m_textSize;
         item.text = text;
-        
         QFont font("sans-serif");
         font.setPixelSize(qMax(1, qRound(m_textSize)));
         font.setBold(true);
         QFontMetricsF fm(font);
         QRectF br = fm.boundingRect(text);
         item.rect = QRectF(x, y, br.width(), br.height()); 
-        
         m_annotations.append(item);
         m_redoStack.clear();
         update();
@@ -233,14 +232,10 @@ public:
     Q_INVOKABLE void processFinalImage(bool saveToDisk) {
         m_selectedIndex = -1; 
         emit selectionChanged();
-        
         QImage target = m_bgImage.copy();
         QPainter p(&target);
-        
-        // Final export should always be highest quality
         p.setRenderHint(QPainter::Antialiasing, true);
         p.setRenderHint(QPainter::SmoothPixmapTransform, true);
-        
         drawAnnotations(&p);
         p.end();
 
@@ -294,8 +289,6 @@ public:
         if (m_bgImage.isNull()) return;
         updateScale();
         
-        // PERFORMANCE BOOST: Disable anti-aliasing and smooth scaling when actively dragging 
-        // to maintain a flawless 144hz feeling during rotation and scaling.
         if (m_isDragging) {
             painter->setRenderHint(QPainter::Antialiasing, false);
             painter->setRenderHint(QPainter::SmoothPixmapTransform, false);
@@ -327,49 +320,33 @@ public:
 
         drawAnnotations(painter);
 
-        // UI Drawing: Selection Highlights & Grab Anchors
         if (m_activeMode == 4 && m_annMode == 6 && m_selectedIndex >= 0 && m_selectedIndex < m_annotations.size()) {
             const AnnItem& item = m_annotations[m_selectedIndex];
             QRectF b = getBounds(item);
             QPointF cx = b.center();
-
             painter->save();
-            
-            // Translate the painter system to the absolute center of the item, rotate it, 
-            // and translate it back to origin. This makes absolute coordinates align with the rotation!
             painter->translate(cx);
             painter->rotate(item.rotation * 180.0 / M_PI);
             painter->translate(-cx);
-
             painter->setPen(QPen(QColor(50, 150, 255, 200), 2 / m_scale, Qt::DashLine));
             painter->setBrush(Qt::NoBrush);
             painter->drawRect(b);
-
             double handleRadius = 5.0 / m_scale;
             double handleSize = 10.0 / m_scale;
             double stickLen = 25.0 / m_scale;
-
             painter->setPen(QPen(QColor(50, 150, 255), 2 / m_scale));
-
-            // 1. Rotation Handle (Top Center)
             painter->drawLine(QPointF(cx.x(), b.top()), QPointF(cx.x(), b.top() - stickLen));
             painter->setBrush(Qt::white);
             painter->drawEllipse(QPointF(cx.x(), b.top() - stickLen), handleRadius + 1/m_scale, handleRadius + 1/m_scale);
-
-            // 2. Resize Handle (Bottom Right)
             painter->setBrush(Qt::white);
             painter->drawRect(QRectF(b.right() - handleRadius, b.bottom() - handleRadius, handleSize, handleSize));
-
-            // 3. Delete Handle / 'X' Button (Top Right)
             painter->setBrush(Qt::red);
             painter->setPen(Qt::NoPen);
             QRectF delRect(b.right() - handleRadius, b.top() - handleRadius, handleSize, handleSize);
             painter->drawRect(delRect);
-            
             painter->setPen(QPen(Qt::white, 1.5 / m_scale));
             painter->drawLine(delRect.topLeft() + QPointF(2/m_scale, 2/m_scale), delRect.bottomRight() - QPointF(2/m_scale, 2/m_scale));
             painter->drawLine(delRect.topRight() + QPointF(-2/m_scale, 2/m_scale), delRect.bottomLeft() + QPointF(2/m_scale, -2/m_scale));
-
             painter->restore();
         }
 
@@ -399,80 +376,50 @@ protected:
         m_dragStart = imgPos;
         m_isDragging = false;
         
-        if (m_activeMode == 0 || m_activeMode == 4) {
-            setInteracting(true);
-        }
+        if (m_activeMode == 0 || m_activeMode == 4) setInteracting(true);
         
         if (m_activeMode == 4) {
             if (m_annMode == 6) { 
                 m_dragAction = 0;
-                
                 double stickLen = 25.0 / m_scale;
                 double hitRadius = 15.0 / m_scale;
-                
                 if (m_selectedIndex >= 0 && m_selectedIndex < m_annotations.size()) {
                     AnnItem& item = m_annotations[m_selectedIndex];
                     QRectF b = getBounds(item);
                     QPointF cx = b.center();
-                    
                     QTransform t;
                     t.translate(cx.x(), cx.y());
                     t.rotateRadians(item.rotation);
                     t.translate(-cx.x(), -cx.y());
                     QPointF localPos = t.inverted().map(imgPos);
-
-                    // Delete Handle Hitbox (Top Right)
-                    if (qAbs(localPos.x() - b.right()) < hitRadius && qAbs(localPos.y() - b.top()) < hitRadius) {
-                        deleteSelected();
-                        return;
-                    }
-                    // Rotate Handle Hitbox (Top Center)
-                    if (QLineF(localPos, QPointF(cx.x(), b.top() - stickLen)).length() < hitRadius) {
-                        m_dragAction = 3; 
-                        return;
-                    }
-                    // Resize Handle Hitbox (Bottom Right)
-                    if (qAbs(localPos.x() - b.right()) < hitRadius && qAbs(localPos.y() - b.bottom()) < hitRadius) {
-                        m_dragAction = 2; 
-                        return;
-                    }
+                    if (qAbs(localPos.x() - b.right()) < hitRadius && qAbs(localPos.y() - b.top()) < hitRadius) { deleteSelected(); return; }
+                    if (QLineF(localPos, QPointF(cx.x(), b.top() - stickLen)).length() < hitRadius) { m_dragAction = 3; return; }
+                    if (qAbs(localPos.x() - b.right()) < hitRadius && qAbs(localPos.y() - b.bottom()) < hitRadius) { m_dragAction = 2; return; }
                 }
 
                 int oldIndex = m_selectedIndex;
                 m_selectedIndex = -1;
-                
                 for (int i = m_annotations.size() - 1; i >= 0; --i) {
                     const AnnItem& item = m_annotations[i];
                     QRectF b = getBounds(item);
                     QPointF cx = b.center();
-                    
                     QTransform t;
                     t.translate(cx.x(), cx.y());
                     t.rotateRadians(item.rotation);
                     t.translate(-cx.x(), -cx.y());
                     QPointF localPos = t.inverted().map(imgPos);
-
                     if (b.adjusted(-10, -10, 10, 10).contains(localPos)) {
                         m_selectedIndex = i;
                         m_dragAction = 1; 
                         m_color = item.color; emit colorChanged();
-                        
-                        if (item.type == 5) { 
-                            m_textSize = item.width; emit textSizeChanged(); 
-                        } else if (item.type != 6) { 
-                            m_size = item.width; emit sizeChanged(); 
-                        }
-                        
+                        if (item.type == 5) { m_textSize = item.width; emit textSizeChanged(); } 
+                        else if (item.type != 6) { m_size = item.width; emit sizeChanged(); }
                         m_annotations.append(m_annotations.takeAt(i));
                         m_selectedIndex = m_annotations.size() - 1;
                         break;
                     }
                 }
-                
-                if (m_selectedIndex != oldIndex) {
-                    emit selectionChanged();
-                    emit rotationChanged();
-                }
+                if (m_selectedIndex != oldIndex) { emit selectionChanged(); emit rotationChanged(); }
                 update();
             } else if (m_annMode == 5) { 
                 emit textPromptRequested(imgPos.x(), imgPos.y());
@@ -480,7 +427,6 @@ protected:
                 m_redoStack.clear();
                 m_selectedIndex = -1;
                 emit selectionChanged();
-                
                 AnnItem item;
                 item.type = m_annMode;
                 item.color = m_color;
@@ -510,14 +456,10 @@ protected:
                 AnnItem &item = m_annotations[m_selectedIndex];
                 QRectF b = getBounds(item);
                 QPointF cx = b.center();
-
                 if (m_dragAction == 1) { 
                     QPointF delta = imgPos - m_dragStart;
-                    if (item.type == 0 || item.type == 3) {
-                        for (auto& p : item.points) p += delta;
-                    } else {
-                        item.rect.translate(delta);
-                    }
+                    if (item.type == 0 || item.type == 3) { for (auto& p : item.points) p += delta; } 
+                    else { item.rect.translate(delta); }
                     m_dragStart = imgPos;
                 } else if (m_dragAction == 3) { 
                     item.rotation = qAtan2(imgPos.y() - cx.y(), imgPos.x() - cx.x()) + M_PI_2;
@@ -527,8 +469,6 @@ protected:
                     QPointF localPos = t.inverted().map(imgPos);
                     double dx = localPos.x() - b.right();
                     double dy = localPos.y() - b.bottom();
-
-                    // Absolute pin calculation to prevent elements drifting when resizing a rotated item
                     QPointF oldTopLeftAbs = t.map(b.topLeft());
 
                     if (item.type == 0 || item.type == 3) {
@@ -540,15 +480,10 @@ protected:
                         }
                     } else if (item.type == 5) {
                         item.width = qMax(4.0, item.width + dx * 0.5); 
-                        QFont font("sans-serif"); 
-                        font.setPixelSize(qMax(1, qRound(item.width))); 
-                        font.setBold(true);
-                        QFontMetricsF fm(font); 
-                        QRectF br = fm.boundingRect(item.text);
-                        item.rect.setWidth(br.width()); 
-                        item.rect.setHeight(br.height());
-                        m_textSize = item.width; 
-                        emit textSizeChanged();
+                        QFont font("sans-serif"); font.setPixelSize(qMax(1, qRound(item.width))); font.setBold(true);
+                        QFontMetricsF fm(font); QRectF br = fm.boundingRect(item.text);
+                        item.rect.setWidth(br.width()); item.rect.setHeight(br.height());
+                        m_textSize = item.width; emit textSizeChanged();
                     } else if (item.type == 6) {
                         double ratio = item.image.width() / (double)item.image.height();
                         if (qAbs(dx) > qAbs(dy)) {
@@ -562,19 +497,13 @@ protected:
                         item.rect.setRight(item.rect.right() + dx);
                         item.rect.setBottom(item.rect.bottom() + dy);
                     }
-
-                    // Shift position logic to map the Top-Left corner back to its original space
                     QRectF newB = getBounds(item);
                     QPointF newCenter = newB.center();
                     QTransform tNew; tNew.translate(newCenter.x(), newCenter.y()); tNew.rotateRadians(item.rotation); tNew.translate(-newCenter.x(), -newCenter.y());
                     QPointF newTopLeftAbs = tNew.map(newB.topLeft());
                     QPointF correction = oldTopLeftAbs - newTopLeftAbs;
-                    
-                    if (item.type == 0 || item.type == 3) {
-                        for (auto& p : item.points) p += correction;
-                    } else {
-                        item.rect.translate(correction);
-                    }
+                    if (item.type == 0 || item.type == 3) { for (auto& p : item.points) p += correction; } 
+                    else { item.rect.translate(correction); }
                 }
             } else if (!m_annotations.isEmpty() && m_annMode != 5 && m_annMode != 6) { 
                 AnnItem &item = m_annotations.last();
@@ -592,7 +521,7 @@ protected:
         m_isDragging = false;
         m_dragAction = 0;
         setInteracting(false);
-        update(); // Triggers final high-quality render pass
+        update();
     }
 
     void hoverMoveEvent(QHoverEvent *event) override {
@@ -612,9 +541,11 @@ signals:
     void regionSelected();
     void textPromptRequested(double imgX, double imgY);
     void isInteractingChanged();
-    
     void selectionChanged();
     void rotationChanged();
+    
+    // NEW SIGNAL: Notifies QML when the true dimensions of the image have successfully loaded
+    void imageLoaded();
 
 private:
     void updateScale() {
@@ -676,8 +607,6 @@ private:
             else if (item.type == 4 && !item.rect.isEmpty()) { 
                 AnnItem& mutItem = const_cast<AnnItem&>(item);
                 QRectF r = mutItem.rect.normalized();
-                
-                // PERFORMANCE BOOST: Cache pixelated output 
                 if (mutItem.image.isNull() || mutItem.cachedRect != r || mutItem.cachedWidth != mutItem.width) {
                     QImage sub = m_bgImage.copy(r.toRect());
                     int ps = std::max(2.0, mutItem.width);
@@ -709,17 +638,14 @@ private:
     QPointF m_dragStart, m_hoverPos;
     bool m_isHovering = false, m_isDragging = false;
     double m_scale = 1.0, m_offsetX = 0.0, m_offsetY = 0.0;
-
     int m_activeMode = 0; 
     int m_annMode = 0; 
     int m_selectedIndex = -1;
     int m_dragAction = 0; 
-
     bool m_isInteracting = false;
     QColor m_color = Qt::red;
     double m_size = 6.0;
     double m_textSize = 32.0;
-
     QList<AnnItem> m_annotations;
     QList<AnnItem> m_redoStack;
 };

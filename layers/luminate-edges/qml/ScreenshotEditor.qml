@@ -14,7 +14,7 @@ Item {
     opacity: visible ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
-    property bool annotateToggle: true
+    property bool annotateToggle: false 
     property bool saveToggle: false
     property bool isAnnotating: canvas.activeMode === 4
     
@@ -23,17 +23,28 @@ Item {
 
     // Fullscreen Toggle State
     property bool isMaximized: false
-    property int originalWidth: 1100
-    property int originalHeight: 620
+    property int originalWidth: 1115
+    property int originalHeight: 635
 
+    // Safely cache dimensions before maximizing to ensure perfect restore
     onIsMaximizedChanged: {
         if (isMaximized) {
+            originalWidth = AppTheme.screenshotEditWidth;
+            originalHeight = AppTheme.screenshotEditHeight;
             AppTheme.screenshotEditWidth = Screen.width;
             AppTheme.screenshotEditHeight = Screen.height;
         } else {
             AppTheme.screenshotEditWidth = originalWidth;
             AppTheme.screenshotEditHeight = originalHeight;
         }
+    }
+
+    // THE FIX: Reset aggressively to State 1 on every display
+    function resetToInitialState() {
+        editorRoot.annotateToggle = false;
+        editorRoot.isMaximized = false;
+        canvas.activeMode = 0;
+        canvas.annMode = 0;
     }
 
     Keys.onPressed: (event) => {
@@ -78,13 +89,12 @@ Item {
     Connections {
         target: Backend
         function onWindowScreenshotReady(path) {
+            resetToInitialState();
             canvas.loadImage(path);
-            if (annotateToggle) canvas.activeMode = 4;
         }
         function onScreenshotStateChanged() {
             if (Backend.displayMode === "screenshot_edit") {
-                canvas.activeMode = editorRoot.annotateToggle ? 4 : 0;
-                editorRoot.isMaximized = false; 
+                resetToInitialState();
             }
         }
     }
@@ -142,11 +152,16 @@ Item {
 
     ScreenshotCanvas {
         id: canvas
+        
+        // MATHEMATICALLY FLAWLESS BEZEL: 
+        // Fills the window entirely, but backs off by 8px on every side.
         anchors.fill: parent
+        anchors.margins: 8 
         
         onVisibleChanged: {
             if (visible) {
                 editorRoot.forceActiveFocus();
+                resetToInitialState();
                 loadImage("/tmp/qscreen_overlay.png");
             }
         }
@@ -160,6 +175,33 @@ Item {
         }
 
         onCaptureFinished: Backend.cancelScreenshot()
+
+        // PERFECT ASPECT RATIO SHRINK WRAP LOGIC
+        Connections {
+            target: canvas
+            function onImageLoaded() {
+                if (canvas.imageWidth > 0 && canvas.imageHeight > 0) {
+                    let maxW = Screen.width * 0.85;
+                    let maxH = Screen.height * 0.85;
+                    
+                    let imgW = canvas.imageWidth;
+                    let imgH = canvas.imageHeight;
+                    
+                    let scale = Math.min(1.0, maxW / imgW, maxH / imgH);
+                    let displayW = Math.round(imgW * scale);
+                    let displayH = Math.round(imgH * scale);
+                    
+                    // Add exactly 16px to the window (8px margin for each side)
+                    originalWidth = displayW + 16;
+                    originalHeight = displayH + 16;
+                    
+                    if (!editorRoot.isMaximized) {
+                        AppTheme.screenshotEditWidth = originalWidth;
+                        AppTheme.screenshotEditHeight = originalHeight;
+                    }
+                }
+            }
+        }
 
         Repeater {
             model: (Backend.displayMode === "screenshot_edit" && canvas.activeMode === 2) ? Backend.ocrResults : 0
@@ -249,10 +291,10 @@ Item {
         }
     }
 
-    // TOP-LEFT WINDOW CONTROL - Fully distinct overlay
+    // TOP-LEFT WINDOW CONTROL - Floating overlay
     Rectangle {
         id: maximizeBtn
-        z: 100 // Explicitly set as a floating overlay above the canvas
+        z: 100 
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.margins: 16
@@ -260,8 +302,7 @@ Item {
         height: 42
         radius: AppTheme.actionRadius
         
-        // Force completely solid background so it NEVER blends with the image
-        color: maMax.pressed ? AppTheme.actionBgHover : Qt.rgba(AppTheme.bg.r, AppTheme.bg.g, AppTheme.bg.b, 1.0)
+        color: maMax.pressed ? AppTheme.actionBgHover : Qt.rgba(AppTheme.bg.r, AppTheme.bg.g, AppTheme.bg.b, 0.85)
         border.color: maMax.containsMouse ? AppTheme.accent : AppTheme.borderAlpha
         border.width: 1
         
@@ -287,12 +328,13 @@ Item {
         }
     }
 
+    // TOP TOOLBAR - Floating overlay
     Rectangle {
         id: topBarContainer
         anchors.top: parent.top; anchors.topMargin: 16
         anchors.horizontalCenter: parent.horizontalCenter
         width: topLayout.width + 16; height: topLayout.height + 16
-        color: AppTheme.bg
+        color: Qt.rgba(AppTheme.bg.r, AppTheme.bg.g, AppTheme.bg.b, 0.85)
         border.color: AppTheme.borderAlpha; border.width: 1; radius: AppTheme.expandedRadius
         
         y: (editorRoot.visible && !editorRoot.uiHidden) ? 16 : -100 
@@ -329,8 +371,13 @@ Item {
                 iconName: "document-edit-symbolic"
                 isActive: editorRoot.annotateToggle || canvas.activeMode === 4
                 onClicked: {
-                    if (canvas.activeMode === 4) canvas.activeMode = 0; 
-                    else editorRoot.annotateToggle = !editorRoot.annotateToggle;
+                    if (canvas.activeMode === 4) {
+                        canvas.activeMode = 0; 
+                        editorRoot.annotateToggle = false;
+                    } else {
+                        editorRoot.annotateToggle = true;
+                        canvas.activeMode = 4;
+                    }
                 } 
             }
             ToolBtn { 
@@ -361,12 +408,13 @@ Item {
         }
     }
 
+    // BOTTOM TOOLBAR - Floating overlay
     Rectangle {
         id: bottomBarContainer
         anchors.bottom: parent.bottom; anchors.bottomMargin: 16
         anchors.horizontalCenter: parent.horizontalCenter
         width: bottomLayout.width + 16; height: bottomLayout.height + 16
-        color: AppTheme.bg
+        color: Qt.rgba(AppTheme.bg.r, AppTheme.bg.g, AppTheme.bg.b, 0.85)
         border.color: AppTheme.borderAlpha; border.width: 1; radius: AppTheme.expandedRadius
         
         visible: canvas.activeMode === 4
@@ -595,7 +643,7 @@ Item {
         id: pickerContainer
         anchors.centerIn: parent
         width: 320; height: Math.min(niriList.contentHeight + 20, 400)
-        color: AppTheme.bg
+        color: Qt.rgba(AppTheme.bg.r, AppTheme.bg.g, AppTheme.bg.b, 0.95)
         border.color: AppTheme.borderAlpha; border.width: 1; radius: 12
         visible: canvas.activeMode === 1
         
@@ -644,7 +692,7 @@ Item {
 
         Rectangle {
             anchors.centerIn: parent
-            width: 306  // 15% Reduction in width (down from 360)
+            width: 306  
             height: 110
             color: AppTheme.bg
             border.color: AppTheme.borderAlpha
@@ -673,7 +721,6 @@ Item {
                         Layout.preferredHeight: 42
                         radius: AppTheme.actionRadius
                         
-                        // Gorgeous Focus Styling with colored outline and subtle tint
                         color: activeFocus ? Qt.rgba(AppTheme.accent.r, AppTheme.accent.g, AppTheme.accent.b, 0.2) : (maYes.pressed ? AppTheme.actionBgHover : AppTheme.actionBg)
                         border.color: activeFocus ? AppTheme.accent : AppTheme.actionBorder
                         border.width: activeFocus ? 2 : 1
@@ -708,7 +755,6 @@ Item {
                         Layout.preferredHeight: 42
                         radius: AppTheme.actionRadius
                         
-                        // Gorgeous Focus Styling with colored outline and subtle tint
                         color: activeFocus ? Qt.rgba(AppTheme.accent.r, AppTheme.accent.g, AppTheme.accent.b, 0.2) : (maNo.pressed ? AppTheme.actionBgHover : AppTheme.actionBg)
                         border.color: activeFocus ? AppTheme.accent : AppTheme.actionBorder
                         border.width: activeFocus ? 2 : 1
