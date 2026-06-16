@@ -55,6 +55,7 @@ public:
         m_net = new QNetworkAccessManager(this);
         QTimer *timer = new QTimer(this); connect(timer, &QTimer::timeout, this, &MediaDaemon::tick); timer->start(150);
     }
+    public slots:
     Q_INVOKABLE void SelectPlayer(const QString &name) { m_manualPlayer = name; }
     Q_INVOKABLE void SetSyncOffset(int offset) { m_pendingOffset = offset; }
 private slots:

@@ -285,7 +285,12 @@ QVariantList AudioBackend::getPlayers() {
 void AudioBackend::setSink(const QString &name) { QProcess::startDetached("sh", {"-c", QString("pactl set-default-sink '%1'").arg(name)}); }
 void AudioBackend::setSource(const QString &name) { QProcess::startDetached("sh", {"-c", QString("pactl set-default-source '%1'").arg(name)}); }
 void AudioBackend::setPlayer(const QString &busName) {
-    QDBusMessage msg = QDBusMessage::createMethodCall("com.meismeric.luminate.MediaManager", "/com/meismeric/luminate/MediaManager", "com.meismeric.luminate.MediaManager", "SelectPlayer");
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        "com.meismeric.luminate.MediaManager", 
+        "/com/meismeric/luminate/MediaManager", 
+        "", 
+        "SelectPlayer"
+    );
     msg << busName;
     QDBusConnection::sessionBus().asyncCall(msg);
 }

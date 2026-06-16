@@ -664,30 +664,6 @@ Item {
                     font.bold: true
                 }
             }
-            
-            Rectangle {
-                Layout.fillWidth: true
-                height: 32
-                radius: 8
-                color: pinLyricsMa.pressed ? AppTheme.actionBgHover : AppTheme.actionBg
-                border.color: Backend.mediaPinned ? AppTheme.accent : AppTheme.actionBorder
-                border.width: 1
-                
-                Text { 
-                    anchors.centerIn: parent
-                    text: Backend.mediaPinned ? "Unpin Lyrics" : "Pin Lyrics"
-                    color: Backend.mediaPinned ? AppTheme.accent : "white"
-                    font.pixelSize: 12
-                    font.bold: true 
-                }
-                
-                MouseArea { 
-                    id: pinLyricsMa
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: { Backend.setMediaPinned(!Backend.mediaPinned); pulltabRoot.expanded = false; } 
-                }
-            }
         }
     }
 }
