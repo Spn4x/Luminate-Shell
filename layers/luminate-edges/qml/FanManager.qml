@@ -8,13 +8,32 @@ Item {
     clip: true
 
     property int activeTab: 0
+    property bool authAttempted: false
 
-    // Dynamic color based on temperature
+    onVisibleChanged: {
+        if (visible) {
+            root.forceActiveFocus();
+            if (!authAttempted) {
+                authAttempted = true;
+                FanBackend.requestPermissions();
+            }
+        }
+        if (!visible && Backend.displayMode !== "polkit") {
+            authAttempted = false;
+        }
+    }
+
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.visible
+        onActivated: Backend.closeFan()
+    }
+
     property color fanColor: {
         let spinning = false;
         if (FanBackend.mode === "auto") { if (FanBackend.rpm > 0) spinning = true; } 
         else if (FanBackend.mode === "full-speed" || FanBackend.mode === "disengaged") { spinning = true; } 
-        else { let lvl = parseInt(FanBackend.mode); if (!isNaN(lvl) && lvl > 0) spinning = true; }
+        else { let lvl = parseInt(FanBackend.mode); if (!Number.isNaN(lvl) && lvl > 0) spinning = true; }
 
         if (!spinning) return AppTheme.fg;
         if (FanBackend.temperature >= 75) return AppTheme.colorKill;
@@ -22,10 +41,8 @@ Item {
         return AppTheme.colorCam;
     }
 
-    // =====================================
-    // REUSABLE "LINKED" CLASPED BUTTONS
-    // =====================================
     component LinkedGroup: Rectangle {
+        id: groupRoot
         property var items: []
         property int currentIndex: 0
         signal itemSelected(int index, string value)
@@ -36,28 +53,46 @@ Item {
         border.color: AppTheme.actionBorder
         border.width: 1
 
+        Rectangle {
+            property real slotWidth: groupRoot.width / Math.max(1, groupRoot.items.length)
+            
+            y: 3
+            height: parent.height - 6
+            width: slotWidth - 6
+            x: 3 + (groupRoot.currentIndex * slotWidth)
+            
+            radius: 6
+            color: AppTheme.accent
+            
+            Behavior on x { 
+                SpringAnimation { spring: 4.0; damping: 0.4; epsilon: 0.5 } 
+            }
+        }
+
         Row {
             anchors.fill: parent
             Repeater {
-                model: items
+                model: groupRoot.items
                 delegate: Item {
-                    width: parent.width / items.length
-                    height: parent.height
+                    width: groupRoot.width / Math.max(1, groupRoot.items.length)
+                    height: groupRoot.height
                     
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: 3
                         radius: 6
-                        color: currentIndex === index ? AppTheme.accent : (ma.containsMouse ? AppTheme.actionBgHover : "transparent")
+                        color: (ma.containsMouse && groupRoot.currentIndex !== index) ? AppTheme.actionBgHover : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
                     }
 
                     Text {
                         anchors.centerIn: parent
                         text: modelData.label
-                        color: currentIndex === index ? AppTheme.bg : AppTheme.fg
+                        color: groupRoot.currentIndex === index ? AppTheme.bg : AppTheme.fg
                         font.pixelSize: 13
                         font.bold: true
+                        
+                        Behavior on color { ColorAnimation { duration: 200 } }
                     }
 
                     MouseArea {
@@ -65,16 +100,13 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: itemSelected(index, modelData.value) 
+                        onClicked: groupRoot.itemSelected(index, modelData.value) 
                     }
                 }
             }
         }
     }
 
-    // =====================================
-    // REUSABLE CANVAS FAN GRAPHIC
-    // =====================================
     component FanGraphic: Item {
         width: 140
         height: 140
@@ -84,7 +116,7 @@ Item {
             anchors.fill: parent
             antialiasing: true
 
-            property color renderColor: fanColor
+            property color renderColor: root.fanColor
             onRenderColorChanged: requestPaint()
 
             onPaint: {
@@ -115,7 +147,6 @@ Item {
                     ctx.restore();
                 }
 
-                // Hub
                 ctx.strokeStyle = Qt.rgba(renderColor.r, renderColor.g, renderColor.b, 0.5);
                 ctx.lineWidth = 2.0;
                 ctx.beginPath();
@@ -139,18 +170,12 @@ Item {
         }
     }
 
-    // =====================================
-    // HIERARCHY / LAYOUT
-    // =====================================
     anchors.fill: parent
-    
-    // Tight bottom margin pulls the slider all the way down
     anchors.topMargin: 20
     anchors.leftMargin: 24
     anchors.rightMargin: 24
     anchors.bottomMargin: 16
 
-    // 1. TOP GREEN BOX: Dashboard / Graphs
     LinkedGroup {
         id: topTabs
         anchors.top: parent.top
@@ -160,11 +185,10 @@ Item {
             { label: "Dashboard", value: "dash" },
             { label: "Graphs", value: "graphs" }
         ]
-        currentIndex: activeTab
-        onItemSelected: (index, val) => { activeTab = index }
+        currentIndex: root.activeTab
+        onItemSelected: function(index, val) { root.activeTab = index }
     }
 
-    // 2. CENTER AREA: Fans and Text
     Item {
         anchors.top: topTabs.bottom
         anchors.bottom: bottomControls.top
@@ -172,7 +196,6 @@ Item {
         anchors.right: parent.right
         visible: activeTab === 0
 
-        // Center Blue Text (Slightly shifted up to sit symmetrically with the bottom controls)
         Column {
             id: centerStats
             anchors.centerIn: parent
@@ -181,7 +204,7 @@ Item {
             
             Text { 
                 text: Math.round(FanBackend.temperature) + "°C"
-                color: fanColor
+                color: root.fanColor
                 font.pixelSize: 42
                 font.bold: true
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -203,14 +226,12 @@ Item {
             }
         }
 
-        // Left Green Circle
         FanGraphic {
             anchors.verticalCenter: centerStats.verticalCenter
             anchors.right: centerStats.left
             anchors.rightMargin: 40
         }
 
-        // Right Green Circle
         FanGraphic {
             anchors.verticalCenter: centerStats.verticalCenter
             anchors.left: centerStats.right
@@ -218,17 +239,15 @@ Item {
         }
     }
 
-    // 3. BOTTOM AREA: Yellow & Blue Boxes
     ColumnLayout {
         id: bottomControls
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 0 // Hitting the absolute floor of the padded layout
+        anchors.bottomMargin: 0 
         anchors.horizontalCenter: parent.horizontalCenter
         width: 420
         spacing: 16
         visible: activeTab === 0
 
-        // Yellow Box: Mode Switcher
         LinkedGroup {
             Layout.fillWidth: true
             items: [
@@ -241,7 +260,7 @@ Item {
                 if (FanBackend.mode === "full-speed" || FanBackend.mode === "disengaged") return 1;
                 return 2;
             }
-            onItemSelected: (index, val) => {
+            onItemSelected: function(index, val) {
                 if (val === "manual") {
                     FanBackend.setMode(Math.round(levelSlider.value).toString());
                 } else {
@@ -250,106 +269,122 @@ Item {
             }
         }
 
-        // Blue Box: The 100% Custom QML Slider
-        RowLayout {
+        Item {
             Layout.fillWidth: true
-            spacing: 16
-            opacity: !isNaN(parseInt(FanBackend.mode)) ? 1.0 : 0.4
+            Layout.preferredHeight: 32 
+            
+            property bool isLocked: Number.isNaN(parseInt(FanBackend.mode))
+            
+            opacity: isLocked ? 0.4 : 1.0
             Behavior on opacity { NumberAnimation { duration: 200 } }
 
-            Slider {
-                id: levelSlider
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignVCenter
-                from: 0
-                to: 7
-                stepSize: 1
-                snapMode: Slider.SnapAlways
-                value: isNaN(parseInt(FanBackend.mode)) ? 0 : parseInt(FanBackend.mode)
+            RowLayout {
+                anchors.fill: parent
+                spacing: 16
 
-                onMoved: {
-                    FanBackend.setMode(value.toString());
-                }
+                Slider {
+                    id: levelSlider
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    from: 0
+                    to: 7
+                    stepSize: 1
+                    snapMode: Slider.SnapAlways
+                    value: Number.isNaN(parseInt(FanBackend.mode)) ? 0 : parseInt(FanBackend.mode)
 
-                // Custom Background with Tick Marks
-                background: Item {
-                    x: levelSlider.leftPadding
-                    y: levelSlider.topPadding + levelSlider.availableHeight / 2 - height / 2
-                    implicitWidth: 200
-                    implicitHeight: 20
-                    width: levelSlider.availableWidth
-                    height: implicitHeight
-
-                    // Base inactive track
-                    Rectangle {
-                        width: parent.width - 16
-                        height: 4
-                        radius: 2
-                        color: Qt.rgba(1, 1, 1, 0.1)
-                        anchors.centerIn: parent
+                    // Proxy property for buttery smooth handle/track animations
+                    property real smoothPos: visualPosition
+                    Behavior on smoothPos {
+                        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
                     }
 
-                    // Active colored track
-                    Rectangle {
-                        x: 8
-                        y: (parent.height - height) / 2
-                        width: levelSlider.handle.x + (levelSlider.handle.width / 2) - 8
-                        height: 4
-                        radius: 2
-                        color: AppTheme.accent
+                    onMoved: {
+                        FanBackend.setMode(value.toString());
                     }
 
-                    // Vertical tick marks (Lines for levels)
-                    Repeater {
-                        model: 8
+                    background: Item {
+                        x: levelSlider.leftPadding
+                        y: levelSlider.topPadding + levelSlider.availableHeight / 2 - height / 2
+                        implicitWidth: 200
+                        implicitHeight: 20
+                        width: levelSlider.availableWidth
+                        height: implicitHeight
+
                         Rectangle {
-                            width: 2
-                            height: 12
-                            radius: 1
-                            color: levelSlider.value >= index ? AppTheme.accent : Qt.rgba(1, 1, 1, 0.3)
-                            x: 8 + index * (parent.width - 16) / 7 - 1
-                            y: 4
+                            width: parent.width - 16
+                            height: 4
+                            radius: 2
+                            color: Qt.rgba(1, 1, 1, 0.1)
+                            anchors.centerIn: parent
+                        }
+
+                        Rectangle {
+                            x: 8
+                            y: (parent.height - height) / 2
+                            width: (levelSlider.smoothPos * (levelSlider.availableWidth - levelHandle.width)) + (levelHandle.width / 2) - 8
+                            height: 4
+                            radius: 2
+                            color: AppTheme.accent
+                        }
+
+                        Repeater {
+                            model: 8
+                            Rectangle {
+                                width: 2
+                                height: 12
+                                radius: 1
+                                color: levelSlider.value >= index ? AppTheme.accent : Qt.rgba(1, 1, 1, 0.3)
+                                x: 8 + index * (parent.width - 16) / 7 - 1
+                                y: 4
+                            }
                         }
                     }
+
+                    handle: Rectangle {
+                        id: levelHandle
+                        // Use the smoothed proxy property for flawless gliding
+                        x: levelSlider.leftPadding + levelSlider.smoothPos * (levelSlider.availableWidth - width)
+                        y: levelSlider.topPadding + levelSlider.availableHeight / 2 - height / 2
+                        width: 16
+                        height: 16
+                        radius: 8
+                        color: levelSlider.pressed ? AppTheme.bg : AppTheme.accent
+                        border.color: levelSlider.pressed ? AppTheme.accent : AppTheme.bg
+                        border.width: 2
+                        
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                    }
                 }
 
-                // Custom Pill Handle
-                handle: Rectangle {
-                    x: levelSlider.leftPadding + levelSlider.visualPosition * (levelSlider.availableWidth - width)
-                    y: levelSlider.topPadding + levelSlider.availableHeight / 2 - height / 2
-                    width: 16
-                    height: 16
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    Layout.alignment: Qt.AlignVCenter
                     radius: 8
-                    color: levelSlider.pressed ? AppTheme.bg : AppTheme.accent
-                    border.color: levelSlider.pressed ? AppTheme.accent : AppTheme.bg
-                    border.width: 2
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                    Behavior on border.color { ColorAnimation { duration: 150 } }
+                    color: AppTheme.actionBg
+                    border.color: AppTheme.actionBorder
+                    Text {
+                        anchors.centerIn: parent
+                        text: levelSlider.value
+                        color: AppTheme.fg
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
                 }
             }
 
-            // Number Readout Box
-            Rectangle {
-                Layout.preferredWidth: 32
-                Layout.preferredHeight: 32
-                Layout.alignment: Qt.AlignVCenter
-                radius: 8
-                color: AppTheme.actionBg
-                border.color: AppTheme.actionBorder
-                Text {
-                    anchors.centerIn: parent
-                    text: levelSlider.value
-                    color: AppTheme.fg
-                    font.pixelSize: 14
-                    font.bold: true
-                }
+            // Authentication blocker overlay
+            MouseArea {
+                anchors.fill: parent
+                enabled: parent.isLocked
+                cursorShape: Qt.PointingHandCursor
+                onClicked: FanBackend.requestPermissions()
+                z: 100
             }
         }
     }
 
-    // =====================================
-    // GRAPHS TAB
-    // =====================================
     RowLayout {
         anchors.top: topTabs.bottom
         anchors.bottom: parent.bottom
@@ -359,7 +394,6 @@ Item {
         spacing: 20
         visible: activeTab === 1
 
-        // RPM Sparkline
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -383,7 +417,13 @@ Item {
                     ctx.resetTransform();
                     ctx.clearRect(0, 0, width, height);
 
-                    var maxVal = 5000;
+                    // Dynamic Y-Axis Auto-Scaling for RPM
+                    var currentMax = 0;
+                    for (var m = 0; m < 60; m++) {
+                        if (history[m] > currentMax) currentMax = history[m];
+                    }
+                    var maxVal = Math.max(1500, currentMax * 1.15); // Adds 15% headroom, bottom floor of 1500 RPM
+
                     var stepX = width / 59.0;
 
                     ctx.beginPath();
@@ -411,7 +451,6 @@ Item {
             }
         }
 
-        // Temp Sparkline
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -435,7 +474,13 @@ Item {
                     ctx.resetTransform();
                     ctx.clearRect(0, 0, width, height);
 
-                    var maxVal = 100;
+                    // Dynamic Y-Axis Auto-Scaling for Temperature
+                    var currentMax = 0;
+                    for (var m = 0; m < 60; m++) {
+                        if (history[m] > currentMax) currentMax = history[m];
+                    }
+                    var maxVal = Math.max(60, currentMax * 1.15); // Adds 15% headroom, bottom floor of 60 C
+
                     var stepX = width / 59.0;
 
                     ctx.beginPath();

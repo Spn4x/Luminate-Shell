@@ -3,6 +3,8 @@
 #include <QVariantList>
 #include <QTimer>
 
+class PolkitBackend; // Forward Declare
+
 class FanBackend : public QObject {
     Q_OBJECT
     Q_PROPERTY(int rpm READ rpm NOTIFY statsChanged)
@@ -12,7 +14,7 @@ class FanBackend : public QObject {
     Q_PROPERTY(QVariantList tempHistory READ tempHistory NOTIFY historyChanged)
 
 public:
-    explicit FanBackend(QObject *parent = nullptr);
+    explicit FanBackend(PolkitBackend *polkit, QObject *parent = nullptr);
     ~FanBackend();
 
     int rpm() const { return m_rpm; }
@@ -22,6 +24,7 @@ public:
     QVariantList tempHistory() const { return m_tempHistory; }
 
     Q_INVOKABLE void setMode(const QString& mode);
+    Q_INVOKABLE void requestPermissions();
 
 signals:
     void statsChanged();
@@ -36,8 +39,11 @@ private:
     int m_rpm = 0;
     double m_temperature = 0.0;
     QString m_mode = "unknown";
+    QString m_pendingMode = ""; // Caches the requested mode across Polkit auth walls
     
     QVariantList m_rpmHistory;
     QVariantList m_tempHistory;
     QTimer m_timer;
+    
+    PolkitBackend *m_polkit = nullptr;
 };

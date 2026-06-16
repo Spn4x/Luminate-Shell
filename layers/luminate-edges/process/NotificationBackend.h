@@ -71,6 +71,8 @@ class NotificationBackend : public QObject, protected QDBusContext {
     
     Q_PROPERTY(QStringList wallpaperPalette READ wallpaperPalette NOTIFY wallpaperPaletteChanged)
 
+    Q_PROPERTY(QString prePolkitMode READ prePolkitMode NOTIFY prePolkitModeChanged)
+
 public:
     explicit NotificationBackend(QObject *parent = nullptr);
 
@@ -123,6 +125,8 @@ public:
     
     QStringList wallpaperPalette() const { return m_wallpaperPalette; }
 
+    QString prePolkitMode() const { return m_prePolkitMode; }
+
     Q_INVOKABLE void invokeAction(const QString& actionId);
     Q_INVOKABLE void readyForNext();
     Q_INVOKABLE void closeNotification();
@@ -153,7 +157,6 @@ public slots:
     void triggerScreenshotFlow();
     void triggerLauncherFlow();
     
-    // THE FIX: Moved to public slots so they map cleanly over D-Bus
     void triggerFanFlow();
     void closeFan();
     void closeLauncher();
@@ -162,6 +165,9 @@ public slots:
     void commitWallpaper();
     void cancelWallpaper();
     void toggleWallpaperMode();
+
+    void handlePolkitRequested(const QString &message);
+    void handlePolkitResolved(bool success);
 
 signals:
     void displayModeChanged();
@@ -193,6 +199,9 @@ signals:
     void currentResolutionChanged();
     
     void wallpaperPaletteChanged();
+    void prePolkitModeChanged();
+    
+    void forceCancelPolkit();
 
 private:
     void processNext();
@@ -212,6 +221,7 @@ private:
     bool m_isShowingLauncher = false;
     bool m_isShowingSystem = false;
     bool m_isShowingFan = false;
+    bool m_isShowingPolkit = false;
 
     QVariantList m_privacyApps;
     QString m_privacySummary;
@@ -255,6 +265,7 @@ private:
     QString m_currentResolution;
     
     QStringList m_wallpaperPalette;
+    QString m_prePolkitMode = "";
     
 private slots:
     void onSurfaceDeskPropsChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);

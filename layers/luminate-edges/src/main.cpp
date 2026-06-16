@@ -8,6 +8,7 @@
 #include <QRegion>
 #include <QDBusConnection>
 #include <QDBusInterface>
+#include <QDBusMetaType>
 #include <QTimer>
 
 #include "../process/NotificationBackend.h" 
@@ -17,24 +18,29 @@
 #include "../process/SystrayBackend.h"
 #include "../process/AudioBackend.h"
 #include "../process/FanBackend.h"
+#include "../process/PolkitBackend.h"
 
 int main(int argc, char *argv[])
 {
     qputenv("QT_QPA_PLATFORM", "wayland");
-
-    QSurfaceFormat format;
-    format.setAlphaBufferSize(8);
+    QSurfaceFormat format; 
+    format.setAlphaBufferSize(8); 
     QSurfaceFormat::setDefaultFormat(format);
-
+    
     QGuiApplication app(argc, argv);
     app.setDesktopFileName(QStringLiteral("luminate"));
 
+    PolkitBackend polkitBackend;
     NotificationBackend backend;
     LauncherBackend launcherBackend("luminate");
     TopbarBackend topbarBackend;
     SystrayBackend systrayBackend;
     AudioBackend audioBackend;
-    FanBackend fanBackend;
+    FanBackend fanBackend(&polkitBackend);
+
+    QObject::connect(&polkitBackend, &PolkitBackend::authRequested, &backend, &NotificationBackend::handlePolkitRequested);
+    QObject::connect(&polkitBackend, &PolkitBackend::authResolved, &backend, &NotificationBackend::handlePolkitResolved);
+    QObject::connect(&backend, &NotificationBackend::forceCancelPolkit, &polkitBackend, &PolkitBackend::cancelAuth);
 
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Backend", &backend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Launcher", &launcherBackend);
@@ -42,6 +48,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Systray", &systrayBackend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "AudioBackend", &audioBackend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "FanBackend", &fanBackend);
+    qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "PolkitAgent", &polkitBackend);
     qmlRegisterType<ScreenshotCanvas>("Luminate.Shell", 1, 0, "ScreenshotCanvas");
 
     QQmlApplicationEngine engine;
@@ -52,7 +59,6 @@ int main(int argc, char *argv[])
 
     QObject *rootObject = engine.rootObjects().first();
     QWindow *window = qobject_cast<QWindow *>(rootObject);
-
     QQuickItem* edge = qobject_cast<QQuickItem*>(rootObject->findChild<QObject*>("luminateEdge"));
 
     if (window && edge) {
@@ -61,20 +67,18 @@ int main(int argc, char *argv[])
             LayerShellQt::Window *lsWindow = LayerShellQt::Window::get(window);
 
             QString currentMode = backend.displayMode();
-            
             QQuickItem* audioOverlay = qobject_cast<QQuickItem*>(rootObject->findChild<QObject*>("audioMenuOverlay"));
             QQuickItem* pulltabMenu = qobject_cast<QQuickItem*>(edge->findChild<QObject*>("pulltabMenu"));
 
             bool hasFullscreenOverlay = false;
-            
-            // THE FIX: Use height > 0 to natively guarantee we know when the menu opens
             bool isMenuOpen = (pulltabMenu && pulltabMenu->height() > 0);
-            
+            bool isModal = (currentMode == "polkit" || currentMode == "screenshot_edit" || currentMode == "launcher" || currentMode == "wallpaper" || currentMode == "fan");
+
             if (audioOverlay && audioOverlay->isVisible()) hasFullscreenOverlay = true;
             if (isMenuOpen) hasFullscreenOverlay = true;
+            if (isModal) hasFullscreenOverlay = true;
 
-            // THE FIX: Demand Keyboard Focus if the pulltabMenu is open
-            bool needsFocus = (currentMode == "screenshot_edit" || currentMode == "launcher" || currentMode == "wallpaper" || currentMode == "fan" || isMenuOpen);
+            bool needsFocus = (isModal || isMenuOpen);
             static bool hadFocus = false;
             
             if (needsFocus && !hadFocus) {
@@ -87,10 +91,8 @@ int main(int argc, char *argv[])
             }
 
             if (hasFullscreenOverlay) {
-                // Take over the entire screen for clicks
                 mask += QRegion(0, 0, window->width(), window->height());
             } else {
-                // Only take over the bottom bar
                 QQuickItem* barBg = qobject_cast<QQuickItem*>(edge->findChild<QObject*>("barBg"));
                 if (barBg && barBg->opacity() > 0.01) {
                     QRectF barRect = barBg->mapRectToScene(QRectF(0, 0, barBg->width(), barBg->height()));
@@ -99,7 +101,6 @@ int main(int argc, char *argv[])
                     }
                 }
             }
-
             if (mask.isEmpty()) {
                 window->setMask(QRegion(0, 0, 1, 1));
             } else {
@@ -142,6 +143,5 @@ int main(int argc, char *argv[])
 
         QTimer::singleShot(150, window, updateInputMask);
     }
-
     return app.exec();
 }

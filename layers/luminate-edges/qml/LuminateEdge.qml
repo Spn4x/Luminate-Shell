@@ -31,7 +31,7 @@ Item {
     }
 
     property string activeState: {
-        if (Backend.displayMode === "launcher" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") {
+        if (Backend.displayMode === "polkit" || Backend.displayMode === "launcher" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") {
             return "expanded";
         }
         if (isPinned) {
@@ -65,6 +65,9 @@ Item {
     
     property int totalWidth: {
         if (activeState === "expanded") {
+            if (Backend.displayMode === "polkit") {
+                return 400; 
+            }
             if (Backend.displayMode === "launcher") {
                 return AppTheme.launcherWidth || 420;
             }
@@ -75,7 +78,7 @@ Item {
                 return 700;
             }
             if (Backend.displayMode === "fan") {
-                return 640; // THE FIX: Wide 16:9 layout
+                return 640; 
             }
             return AppTheme.expandedMinWidth || 420;
         }
@@ -101,6 +104,9 @@ Item {
 
     property int totalHeight: {
         if (activeState === "expanded") {
+            if (Backend.displayMode === "polkit") {
+                return 180; 
+            }
             if (Backend.displayMode === "launcher") {
                 return launcherModule ? launcherModule.expandedHeight : 120;
             }
@@ -111,7 +117,7 @@ Item {
                 return 170;
             }
             if (Backend.displayMode === "fan") {
-                return 330; // THE FIX: Tightly hugs the slider, no dead space!
+                return 330; 
             }
             if (Backend.displayMode === "notification") {
                 return edgeHelper.notifHeight + 32;
@@ -191,22 +197,22 @@ Item {
         width: Window.window ? Window.window.width : Screen.width
         height: Window.window ? Window.window.height : Screen.height
         z: -10 
-        enabled: pulltabMenu.expanded || Backend.displayMode === "fan"
+        enabled: pulltabMenu.expanded || Backend.displayMode === "fan" || Backend.displayMode === "polkit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper"
         
         onClicked: {
             if (Backend.displayMode === "fan") {
                 Backend.closeFan();
+            } else if (Backend.displayMode === "polkit") {
+                PolkitAgent.cancelAuth();
+            } else if (Backend.displayMode === "launcher") {
+                Backend.closeLauncher();
+            } else if (Backend.displayMode === "wallpaper") {
+                Backend.cancelWallpaper();
             } else {
                 root.requestedTrayBusName = "";
                 pulltabMenu.expanded = false;
             }
         }
-    }
-
-    Shortcut {
-        sequence: "Escape"
-        enabled: Backend.displayMode === "fan"
-        onActivated: Backend.closeFan()
     }
 
     Connections {
@@ -244,9 +250,15 @@ Item {
         bottomLeftRadius: 0
         bottomRightRadius: 0
         
-        Behavior on width { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
-        Behavior on height { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
-        Behavior on currentRadius { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
+        Behavior on width { 
+            NumberAnimation { duration: 350; easing.type: Easing.OutCubic } 
+        }
+        Behavior on height { 
+            NumberAnimation { duration: 350; easing.type: Easing.OutCubic } 
+        }
+        Behavior on currentRadius { 
+            NumberAnimation { duration: 350; easing.type: Easing.OutCubic } 
+        }
 
         color: AppTheme.bg
         border.color: root.isPinned ? AppTheme.borderAlpha : (activeState === "passive" ? "transparent" : AppTheme.borderAlpha)
@@ -327,7 +339,9 @@ Item {
                 opacity: activeState === "passive" ? 1 : 0
                 visible: opacity > 0
                 
-                Behavior on opacity { NumberAnimation { duration: 150 } }
+                Behavior on opacity { 
+                    NumberAnimation { duration: 150 } 
+                }
                 
                 Rectangle { 
                     anchors.centerIn: parent
@@ -335,7 +349,9 @@ Item {
                     height: 4
                     radius: 2
                     color: Backend.displayMode !== "idle" ? AppTheme.accent : "#55ffffff"
-                    Behavior on color { ColorAnimation { duration: 200 } } 
+                    Behavior on color { 
+                        ColorAnimation { duration: 200 } 
+                    } 
                 }
             }
 
@@ -346,7 +362,9 @@ Item {
                 opacity: activeState === "statusbar" ? 1 : 0
                 visible: opacity > 0
                 
-                Behavior on opacity { NumberAnimation { duration: 150 } }
+                Behavior on opacity { 
+                    NumberAnimation { duration: 150 } 
+                }
 
                 showPortal: false
                 isPinned: root.isPinned
@@ -413,7 +431,9 @@ Item {
                 opacity: activeState === "pill" ? 1 : 0
                 visible: opacity > 0
                 
-                Behavior on opacity { NumberAnimation { duration: 150 } }
+                Behavior on opacity { 
+                    NumberAnimation { duration: 150 } 
+                }
 
                 Item {
                     anchors.fill: parent
@@ -442,7 +462,10 @@ Item {
                                 height: parent.height
                                 radius: 5
                                 color: AppTheme.fg
-                                Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } } 
+                                
+                                Behavior on width { 
+                                    NumberAnimation { duration: 150; easing.type: Easing.OutCubic } 
+                                } 
                             }
                         }
                         
@@ -512,14 +535,16 @@ Item {
             opacity: activeState === "expanded" ? 1 : 0
             visible: opacity > 0
             
-            Behavior on opacity { NumberAnimation { duration: 150 } }
+            Behavior on opacity { 
+                NumberAnimation { duration: 150 } 
+            }
 
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 
                 onClicked: (mouse) => {
-                    if (Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") {
+                    if (Backend.displayMode === "polkit" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") {
                         return;
                     }
                     Backend.isExpanded = false;
@@ -554,16 +579,22 @@ Item {
                 visible: Backend.displayMode === "launcher" 
             }
 
-            WallpaperChooser {
+            WallpaperChooser { 
                 id: wallpaperChooser
                 anchors.fill: parent
-                visible: Backend.displayMode === "wallpaper"
+                visible: Backend.displayMode === "wallpaper" 
             }
 
-            FanManager {
+            FanManager { 
                 id: fanModule
                 anchors.fill: parent
-                visible: Backend.displayMode === "fan"
+                visible: Backend.displayMode === "fan" 
+            }
+
+            PolkitAuth { 
+                id: polkitModule
+                anchors.fill: parent
+                visible: Backend.displayMode === "polkit" 
             }
         }
     }
@@ -575,7 +606,7 @@ Item {
             return;
         }
 
-        if (activeState === "expanded" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") {
+        if (activeState === "expanded" || Backend.displayMode === "polkit" || Backend.displayMode === "screenshot_edit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") {
             return;
         }
         if (pulltabMenu.expanded) {
@@ -624,7 +655,7 @@ Item {
             if (Backend.displayMode === "osd") root.startTimer(); 
         }
         function onDisplayModeChanged() {
-            if (Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") { 
+            if (Backend.displayMode === "polkit" || Backend.displayMode === "launcher" || Backend.displayMode === "wallpaper" || Backend.displayMode === "fan") { 
                 autoDismissTimer.stop(); 
                 if (Backend.displayMode === "launcher") launcherModule.openAndFocus(); 
                 return; 

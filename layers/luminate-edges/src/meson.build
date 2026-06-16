@@ -6,12 +6,12 @@ processed_files = qt6.preprocess(
     '../process/TopbarBackend.h',
     '../process/SystrayBackend.h',
     '../process/AudioBackend.h',
-    '../process/FanBackend.h'
+    '../process/FanBackend.h',
+    '../process/PolkitBackend.h'
   ],
   qresources: 'resources.qrc'
 )
 
-# Native libsensors dependency for the Fan Backend
 sensors_dep = cpp.find_library('sensors', required: true)
 
 src_files = [
@@ -23,6 +23,7 @@ src_files = [
   '../process/SystrayBackend.cpp',
   '../process/AudioBackend.cpp',
   '../process/FanBackend.cpp',
+  '../process/PolkitBackend.cpp',
   processed_files
 ]
 

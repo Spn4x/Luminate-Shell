@@ -302,7 +302,6 @@ void NotificationBackend::UpdateMediaInfo(const QString &playerName, const QStri
     
     if (m_originalArtUrl != artUrl) {
         if (artUrl.isEmpty() && !trackChanged && !m_mediaArt.isEmpty()) {
-            // Keep current art
         } else {
             m_originalArtUrl = artUrl;
             
@@ -391,7 +390,7 @@ void NotificationBackend::fetchDuration() {
 }
 
 void NotificationBackend::TriggerMediaPeek() {
-    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper || m_isShowingFan) return; 
+    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper || m_isShowingFan || m_isShowingPolkit) return; 
     
     m_displayMode = "media";
     emit displayModeChanged();
@@ -399,7 +398,7 @@ void NotificationBackend::TriggerMediaPeek() {
 }
 
 void NotificationBackend::TriggerSystemPeek() {
-    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper || hasMedia() || m_isShowingFan) return;
+    if (m_isShowingNotif || m_isShowingOsd || !m_privacyApps.isEmpty() || !m_screenshotState.isEmpty() || m_isShowingLauncher || m_isPickingWallpaper || hasMedia() || m_isShowingFan || m_isShowingPolkit) return;
     
     updateSystemInfo();
     m_isShowingSystem = true;
@@ -420,17 +419,14 @@ void NotificationBackend::processNext() {
 }
 
 void NotificationBackend::readyForNext() {
-    if (m_displayMode == "screenshot_info" || m_displayMode == "screenshot_edit" || m_displayMode == "launcher" || m_displayMode == "wallpaper" || m_displayMode == "fan") {
+    if (m_displayMode == "screenshot_info" || m_displayMode == "screenshot_edit" || m_displayMode == "launcher" || m_displayMode == "wallpaper" || m_displayMode == "fan" || m_displayMode == "polkit") {
         return; 
     }
     
-    if (m_displayMode == "osd") {
-        m_isShowingOsd = false;
-    } else if (m_displayMode == "notification") {
-        m_isShowingNotif = false;
-    } else if (m_displayMode == "system") {
-        m_isShowingSystem = false;
-    } else if (m_displayMode == "media") {
+    if (m_displayMode == "osd") m_isShowingOsd = false;
+    else if (m_displayMode == "notification") m_isShowingNotif = false;
+    else if (m_displayMode == "system") m_isShowingSystem = false;
+    else if (m_displayMode == "media") {
         if (!m_mediaPinned) {
             m_displayMode = "idle";
             emit displayModeChanged();
@@ -438,54 +434,12 @@ void NotificationBackend::readyForNext() {
         }
         return;
     }
-    
     processNext();
 }
 
 void NotificationBackend::closeNotification() {
     m_isShowingNotif = false;
     processNext();
-}
-
-void NotificationBackend::updateDisplayMode() {
-    QString oldMode = m_displayMode;
-    bool mediaValid = !m_activePlayerName.isEmpty() && m_mediaStatus != "Stopped";
-
-    if (m_isShowingLauncher) {
-        m_displayMode = "launcher";
-    } else if (m_isShowingFan) {
-        m_displayMode = "fan";
-    } else if (m_isPickingWallpaper) { 
-        m_displayMode = "wallpaper";
-    } else if (m_screenshotState == "info") {
-        m_displayMode = "screenshot_info";
-    } else if (m_screenshotState == "edit") {
-        m_displayMode = "screenshot_edit";
-    } else if (m_isShowingOsd) {
-        m_displayMode = "osd";
-    } else if (m_isShowingNotif) {
-        m_displayMode = "notification";
-    } else if (!m_privacyApps.isEmpty()) {
-        m_displayMode = "privacy";
-    } else if (m_isShowingSystem) {
-        m_displayMode = "system";
-    } else if (m_mediaPinned && mediaValid) {
-        m_displayMode = "media";
-    } else if (oldMode == "media" && !m_mediaPinned && mediaValid) {
-        m_displayMode = "media"; 
-    } else {
-        m_displayMode = "idle";
-    }
-
-    if (m_displayMode != oldMode) {
-        emit displayModeChanged();
-        if (m_displayMode == "idle") emit requestHide();
-        else emit requestShow(); 
-    } else if (m_displayMode == "notification" || m_displayMode == "osd" || m_displayMode == "launcher" || m_displayMode == "system" || m_displayMode == "wallpaper" || m_displayMode == "fan") {
-        emit requestShow(); 
-    } else if (m_displayMode == "idle") {
-        emit requestHide(); 
-    }
 }
 
 void NotificationBackend::invokeAction(const QString& actionId) {
@@ -509,7 +463,6 @@ void NotificationBackend::killAllPrivacyApps() {
         QVariantMap map = v.toMap();
         uint pid = map["pid"].toUInt();
         QString name = map["name"].toString();
-        
         if (pid > 0) kill(pid, SIGTERM);
         else if (!name.isEmpty()) {
             QString safeName = name.split(" ").first();
@@ -568,9 +521,7 @@ void NotificationBackend::setupMediaManager() {
     QDBusReply<QVariantMap> reply = QDBusConnection::sessionBus().call(msg);
     if (reply.isValid()) {
         QVariantMap props = reply.value();
-        if (props.contains("CurrentLyrics")) {
-            parseLyrics(props["CurrentLyrics"].toString());
-        }
+        if (props.contains("CurrentLyrics")) parseLyrics(props["CurrentLyrics"].toString());
         if (props.contains("CurrentLyricIndex")) {
             m_currentLyricIndex = props["CurrentLyricIndex"].toInt();
             emit lyricIndexChanged();
@@ -580,10 +531,7 @@ void NotificationBackend::setupMediaManager() {
 
 void NotificationBackend::onMediaManagerPropsChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated) {
     Q_UNUSED(interface); Q_UNUSED(invalidated);
-    
-    if (changed.contains("CurrentLyrics")) {
-        parseLyrics(changed["CurrentLyrics"].toString());
-    }
+    if (changed.contains("CurrentLyrics")) parseLyrics(changed["CurrentLyrics"].toString());
     if (changed.contains("CurrentLyricIndex")) {
         m_currentLyricIndex = changed["CurrentLyricIndex"].toInt();
         emit lyricIndexChanged();
@@ -638,30 +586,6 @@ void NotificationBackend::setMediaPinned(bool pinned) {
         emit mediaPinnedChanged();
         updateDisplayMode();
     }
-}
-
-void NotificationBackend::triggerScreenshotFlow() {
-    m_screenshotState = "hidden";
-    updateDisplayMode();
-
-    m_tempScreenshotPath = QDir::tempPath() + "/qscreen_overlay.png";
-    QProcess::execute("grim", {m_tempScreenshotPath});
-
-    m_screenshotState = "info";
-    emit screenshotStateChanged();
-    updateDisplayMode();
-}
-
-void NotificationBackend::expandScreenshotToEdit() {
-    m_screenshotState = "edit";
-    emit screenshotStateChanged();
-    updateDisplayMode();
-}
-
-void NotificationBackend::cancelScreenshot() {
-    m_screenshotState = "";
-    emit screenshotStateChanged();
-    updateDisplayMode();
 }
 
 void NotificationBackend::fetchNiriWindows() {
@@ -742,18 +666,8 @@ void NotificationBackend::copyTextToClipboard(const QString& text) {
     QProcess::execute("notify-send", {"Text Copied", "Selected text is on your clipboard."});
 }
 
-void NotificationBackend::triggerLauncherFlow() {
-    m_isShowingLauncher = true;
-    updateDisplayMode();
-}
-
 void NotificationBackend::closeLauncher() {
     m_isShowingLauncher = false;
-    updateDisplayMode();
-}
-
-void NotificationBackend::triggerFanFlow() {
-    m_isShowingFan = true;
     updateDisplayMode();
 }
 
@@ -778,7 +692,120 @@ void NotificationBackend::cancelWallpaper() {
     QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
 }
 
+void NotificationBackend::triggerLauncherFlow() {
+    if (m_isShowingPolkit) emit forceCancelPolkit();
+    m_isShowingFan = false;
+    m_isPickingWallpaper = false;
+    m_screenshotState = "";
+    m_isShowingLauncher = true;
+    updateDisplayMode(); 
+}
+
+void NotificationBackend::triggerFanFlow() {
+    if (m_isShowingPolkit) emit forceCancelPolkit();
+    m_isShowingLauncher = false;
+    m_isPickingWallpaper = false;
+    m_screenshotState = "";
+    m_isShowingFan = true;
+    updateDisplayMode();
+}
+
+void NotificationBackend::triggerScreenshotFlow() {
+    if (m_isShowingPolkit) emit forceCancelPolkit();
+    m_isShowingLauncher = false;
+    m_isShowingFan = false;
+    m_isPickingWallpaper = false;
+    m_screenshotState = "hidden";
+    updateDisplayMode();
+
+    m_tempScreenshotPath = QDir::tempPath() + "/qscreen_overlay.png";
+    QProcess::execute("grim", {m_tempScreenshotPath});
+
+    m_screenshotState = "info";
+    emit screenshotStateChanged();
+    updateDisplayMode();
+}
+
+void NotificationBackend::expandScreenshotToEdit() {
+    if (m_isShowingPolkit) emit forceCancelPolkit();
+    m_screenshotState = "edit";
+    emit screenshotStateChanged();
+    updateDisplayMode();
+}
+
+void NotificationBackend::cancelScreenshot() {
+    m_screenshotState = "";
+    emit screenshotStateChanged();
+    updateDisplayMode();
+}
+
 void NotificationBackend::toggleWallpaperMode() {
+    if (m_isShowingPolkit) emit forceCancelPolkit();
+    m_isShowingLauncher = false;
+    m_isShowingFan = false;
+    m_screenshotState = "";
     QDBusMessage msg = QDBusMessage::createMethodCall("com.meismeric.SurfaceDesk", "/com/meismeric/SurfaceDesk", "com.meismeric.SurfaceDesk", "ToggleWallpaperMode");
     QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+}
+
+void NotificationBackend::handlePolkitRequested(const QString &message) {
+    Q_UNUSED(message);
+    if (m_displayMode != "polkit") {
+        m_prePolkitMode = m_displayMode;
+        emit prePolkitModeChanged();
+    }
+    m_isShowingPolkit = true;
+    updateDisplayMode();
+}
+
+void NotificationBackend::handlePolkitResolved(bool success) {
+    Q_UNUSED(success);
+    m_isShowingPolkit = false;
+    updateDisplayMode();
+}
+
+void NotificationBackend::updateDisplayMode() {
+    QString oldMode = m_displayMode;
+    bool mediaValid = !m_activePlayerName.isEmpty() && m_mediaStatus != "Stopped";
+
+    if (m_isShowingPolkit) {
+        m_displayMode = "polkit";
+    } else if (m_isShowingFan) {
+        m_displayMode = "fan";
+    } else if (m_isShowingLauncher) {
+        m_displayMode = "launcher";
+    } else if (m_screenshotState == "edit") {
+        m_displayMode = "screenshot_edit";
+    } else if (m_screenshotState == "info") {
+        m_displayMode = "screenshot_info";
+    } else if (m_isPickingWallpaper) { 
+        m_displayMode = "wallpaper";
+    } else if (m_isShowingOsd) {
+        m_displayMode = "osd";
+    } else if (m_isShowingNotif) {
+        m_displayMode = "notification";
+    } else if (!m_privacyApps.isEmpty()) {
+        m_displayMode = "privacy";
+    } else if (m_isShowingSystem) {
+        m_displayMode = "system";
+    } else if (m_mediaPinned && mediaValid) {
+        m_displayMode = "media";
+    } else if (oldMode == "media" && !m_mediaPinned && mediaValid) {
+        m_displayMode = "media"; 
+    } else {
+        m_displayMode = "idle";
+    }
+
+    if (m_displayMode != oldMode) {
+        emit displayModeChanged();
+        if (m_displayMode == "idle" || m_screenshotState == "hidden") {
+            emit requestHide();
+        } else {
+            emit requestShow(); 
+        }
+    } else if (m_displayMode != "idle" && m_screenshotState != "hidden") {
+        emit requestShow(); 
+    } else {
+        emit requestHide();
+    }
 }

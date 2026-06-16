@@ -13,6 +13,7 @@
         <file alias="qml/LauncherUI.qml">../qml/LauncherUI.qml</file>
         <file alias="qml/WallpaperChooser.qml">../qml/WallpaperChooser.qml</file>
         <file alias="qml/FanManager.qml">../qml/FanManager.qml</file>
+        <file alias="qml/PolkitAuth.qml">../qml/PolkitAuth.qml</file>
         
         <file alias="qml/ClockModule.qml">../qml/ClockModule.qml</file>
         <file alias="qml/SysinfoModule.qml">../qml/SysinfoModule.qml</file>
