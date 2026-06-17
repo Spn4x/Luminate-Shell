@@ -25,7 +25,8 @@ Item {
     property var audioMenuItems: []
 
     property int baseWidth: {
-        if (mode === "media" || mode === "notification") {
+        // THE FIX: Include calendar in the 320px width class
+        if (mode === "media" || mode === "notification" || mode === "calendar") {
             return 320;
         }
         if (mode === "privacy") {
@@ -56,6 +57,10 @@ Item {
         if (mode === "media") {
             return mediaCol.implicitHeight + 24;
         }
+        // THE FIX: Define the dynamic expanded height for the calendar
+        if (mode === "calendar") {
+            return calendarCol.implicitHeight + 24;
+        }
         return 0;
     }
 
@@ -76,7 +81,6 @@ Item {
         if (!expanded) {
             openSubmenus = {};
         } else {
-            // THE FIX: Force keyboard focus to this Item so the Escape Shortcut can fire
             pulltabRoot.forceActiveFocus();
         }
     }
@@ -232,6 +236,20 @@ Item {
                 SettingsBtn { iconStr: "󰒲"; labelStr: "Sleep"; cmdStr: "systemctl suspend" }
                 SettingsBtn { iconStr: ""; labelStr: "Reboot"; cmdStr: "systemctl reboot" }
                 SettingsBtn { iconStr: ""; labelStr: "Shut Down"; cmdStr: "systemctl poweroff" }
+            }
+        }
+
+        // --- NEW: CALENDAR LAYOUT ---
+        ColumnLayout {
+            id: calendarCol
+            anchors.top: parent.top
+            anchors.topMargin: 12
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width - 24
+            visible: pulltabRoot.mode === "calendar"
+
+            CalendarUI {
+                Layout.fillWidth: true
             }
         }
 

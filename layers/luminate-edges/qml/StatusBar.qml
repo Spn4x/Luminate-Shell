@@ -14,6 +14,7 @@ Item {
     signal trayMenuRequested(string busName, string menuPath, int x, int y)
     signal audioMenuRequested(string type, var targetItem, var items)
     signal indicatorClicked(string type, var targetItem)
+    signal calendarRequested(var targetItem)
 
     // Ensures exactly 16px of padding around the master row content, eliminating dead space
     implicitWidth: Math.max(300, masterRow.implicitWidth + 32)
@@ -175,7 +176,8 @@ Item {
             }
 
             ClockModule { 
-                anchors.verticalCenter: parent.verticalCenter 
+                anchors.verticalCenter: parent.verticalCenter
+                onClicked: (targetItem) => statusBarRoot.calendarRequested(targetItem)
             }
             
             SystrayModule { 

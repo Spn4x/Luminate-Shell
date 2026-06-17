@@ -423,6 +423,21 @@ Item {
                         root.startTimer();
                     }
                 }
+
+                // THE FIX: Respond to the new Calendar module request
+                onCalendarRequested: (targetItem) => {
+                    if (pulltabMenu.expanded && pulltabMenu.mode === "calendar") {
+                        pulltabMenu.expanded = false;
+                    } else {
+                        let p = targetItem.mapToItem(root, targetItem.width / 2, 0);
+                        pulltabMenu.targetX = p.x - (pulltabMenu.baseWidth / 2);
+                        pulltabMenu.mode = "calendar";
+                        pulltabMenu.expanded = true;
+                        
+                        root.isPeeking = true;
+                        root.startTimer();
+                    }
+                }
             }
 
             Item {

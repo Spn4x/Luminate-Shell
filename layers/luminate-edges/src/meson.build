@@ -7,7 +7,8 @@ processed_files = qt6.preprocess(
     '../process/SystrayBackend.h',
     '../process/AudioBackend.h',
     '../process/FanBackend.h',
-    '../process/PolkitBackend.h'
+    '../process/PolkitBackend.h',
+    '../process/CalendarBackend.h'
   ],
   qresources: 'resources.qrc'
 )
@@ -24,6 +25,7 @@ src_files = [
   '../process/AudioBackend.cpp',
   '../process/FanBackend.cpp',
   '../process/PolkitBackend.cpp',
+  '../process/CalendarBackend.cpp',
   processed_files
 ]
 

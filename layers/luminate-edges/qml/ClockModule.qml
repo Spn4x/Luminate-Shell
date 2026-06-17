@@ -3,8 +3,11 @@ import Qt5Compat.GraphicalEffects
 import Luminate.Shell 
 
 Item {
+    id: clockRoot
     implicitWidth: 120
     implicitHeight: AppTheme.moduleHeight
+
+    signal clicked(var targetItem)
 
     // 1. Base Background
     Rectangle {
@@ -73,5 +76,12 @@ Item {
             font.family: AppTheme.mainFont
             font.pixelSize: AppTheme.fontSize
         }
+    }
+
+    // 6. Interactive Click Target
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        onClicked: clockRoot.clicked(clockRoot)
     }
 }

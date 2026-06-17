@@ -19,6 +19,7 @@
 #include "../process/AudioBackend.h"
 #include "../process/FanBackend.h"
 #include "../process/PolkitBackend.h"
+#include "../process/CalendarBackend.h" // <-- NEW BACKEND
 
 int main(int argc, char *argv[])
 {
@@ -30,6 +31,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     app.setDesktopFileName(QStringLiteral("luminate"));
 
+    // Initialize all Backends
     PolkitBackend polkitBackend;
     NotificationBackend backend;
     LauncherBackend launcherBackend("luminate");
@@ -37,11 +39,13 @@ int main(int argc, char *argv[])
     SystrayBackend systrayBackend;
     AudioBackend audioBackend;
     FanBackend fanBackend(&polkitBackend);
+    CalendarBackend calendarBackend; // <-- NEW BACKEND INSTANCE
 
     QObject::connect(&polkitBackend, &PolkitBackend::authRequested, &backend, &NotificationBackend::handlePolkitRequested);
     QObject::connect(&polkitBackend, &PolkitBackend::authResolved, &backend, &NotificationBackend::handlePolkitResolved);
     QObject::connect(&backend, &NotificationBackend::forceCancelPolkit, &polkitBackend, &PolkitBackend::cancelAuth);
 
+    // Register singletons BEFORE loading the QML engine
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Backend", &backend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Launcher", &launcherBackend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "Topbar", &topbarBackend);
@@ -49,6 +53,8 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "AudioBackend", &audioBackend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "FanBackend", &fanBackend);
     qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "PolkitAgent", &polkitBackend);
+    qmlRegisterSingletonInstance("Luminate.Shell", 1, 0, "CalendarBackend", &calendarBackend); // <-- REGISTRATION
+    
     qmlRegisterType<ScreenshotCanvas>("Luminate.Shell", 1, 0, "ScreenshotCanvas");
 
     QQmlApplicationEngine engine;
