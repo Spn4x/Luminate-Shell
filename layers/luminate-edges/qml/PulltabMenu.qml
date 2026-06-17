@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import Qt5Compat.GraphicalEffects
 import Luminate.Shell
 
@@ -12,8 +13,19 @@ Item {
     property var luminateEdge: parent
     
     property real targetX: 0
-    property real clampedX: Math.max(16, Math.min(targetX, parent.width - baseWidth - 16))
     
+    // --- FLAWLESS ADAPTIVE CLAMPING MATH ---
+    // Calculates physical monitor bounds so menus never bleed off the screen
+    property real screenMarginX: luminateEdge.parent ? (luminateEdge.parent.width - luminateEdge.width) / 2 : 0
+    property real absoluteMinX: 16 - screenMarginX
+    property real absoluteMaxX: luminateEdge.width + screenMarginX - baseWidth - 16
+
+    // If the menu fits inside the status bar, force it to snap inside the edges.
+    // If it is massive (like the Calendar), allow it to overhang perfectly centered.
+    property real idealMinX: baseWidth <= parent.width ? 16 : absoluteMinX
+    property real idealMaxX: baseWidth <= parent.width ? (parent.width - baseWidth - 16) : absoluteMaxX
+
+    property real clampedX: Math.max(idealMinX, Math.min(targetX, idealMaxX))
     x: clampedX
 
     property string activeBusName: ""
@@ -25,8 +37,10 @@ Item {
     property var audioMenuItems: []
 
     property int baseWidth: {
-        // THE FIX: Include calendar in the 320px width class
-        if (mode === "media" || mode === "notification" || mode === "calendar") {
+        if (mode === "calendar") {
+            return 540; // Increased to prevent internal clipping
+        }
+        if (mode === "media" || mode === "notification") {
             return 320;
         }
         if (mode === "privacy") {
@@ -39,6 +53,9 @@ Item {
     }
 
     property int baseHeight: {
+        if (mode === "calendar") {
+            return 380; 
+        }
         if (mode === "settings") {
             return settingsLayout.implicitHeight + 24;
         }
@@ -57,15 +74,14 @@ Item {
         if (mode === "media") {
             return mediaCol.implicitHeight + 24;
         }
-        // THE FIX: Define the dynamic expanded height for the calendar
-        if (mode === "calendar") {
-            return calendarCol.implicitHeight + 24;
-        }
         return 0;
     }
 
     width: baseWidth
     height: expanded ? baseHeight : 0
+    
+    // THIS CLIPS THE CONTENT, CREATING THE PHYSICAL SLIDE-OUT ILLUSION
+    clip: true
 
     Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
     Behavior on height { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
@@ -87,9 +103,7 @@ Item {
 
     Rectangle {
         id: bgRect
-        anchors.bottom: parent.bottom 
-        width: parent.width
-        height: pulltabRoot.height
+        anchors.fill: parent 
         color: AppTheme.bg
         border.color: AppTheme.borderAlpha
         border.width: 2
@@ -107,15 +121,14 @@ Item {
         }
     }
 
+    // THE CONTENT CONTAINER IS ANCHORED TO THE TOP.
+    // AS HEIGHT GROWS, IT REVEALS ITSELF WITHOUT FADING IN!
     Item {
         id: contentContainer
-        anchors.bottom: parent.bottom
+        anchors.top: parent.top
         width: parent.width
         height: pulltabRoot.baseHeight
-        opacity: pulltabRoot.expanded ? 1.0 : 0.0
-        visible: opacity > 0
-        
-        Behavior on opacity { NumberAnimation { duration: 150 } }
+        visible: pulltabRoot.height > 2
 
         ColumnLayout {
             id: settingsLayout
@@ -239,17 +252,15 @@ Item {
             }
         }
 
-        // --- NEW: CALENDAR LAYOUT ---
         ColumnLayout {
             id: calendarCol
-            anchors.top: parent.top
-            anchors.topMargin: 12
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: parent.width - 24
+            anchors.fill: parent
+            anchors.margins: 12
             visible: pulltabRoot.mode === "calendar"
 
             CalendarUI {
                 Layout.fillWidth: true
+                Layout.fillHeight: true
             }
         }
 

@@ -8,6 +8,8 @@ Item {
     id: playerRoot
     property bool isExpanded: false
     property int expandedImplicitHeight: expandedLayout.implicitHeight
+    
+    // THE FIX: Provide the exact width of the rendered text so LuminateEdge can snap to it
     property int pinnedContentWidth: pinnedLyricText.implicitWidth
 
     component SystemIcon: Button {
@@ -41,15 +43,24 @@ Item {
             id: pinnedLyricContainer
             anchors.fill: parent
             
+            // THE FIX: Preserve the C++ binding independently of the UI texts
             property string currentText: Backend.mediaHasLyrics ? (Backend.mediaCurrentLyric !== "" ? Backend.mediaCurrentLyric : "\u266a") : Backend.mediaTitle
             
+            property string displayedText: currentText
+            property string outgoingText: ""
+            
             onCurrentTextChanged: {
-                if (playerRoot.isExpanded) return;
+                if (playerRoot.isExpanded) {
+                    displayedText = currentText;
+                    return;
+                }
                 
-                oldLyricText.text = pinnedLyricText.text;
-                oldLyricText.y = 0; oldLyricText.opacity = 1;
+                // Swap the strings logically so bindings aren't destroyed
+                outgoingText = displayedText;
+                oldLyricText.y = 0; 
+                oldLyricText.opacity = 1;
                 
-                pinnedLyricText.text = currentText;
+                displayedText = currentText;
                 pinnedLyricText.y = parent.height; 
                 pinnedLyricText.opacity = 0;
                 
@@ -64,11 +75,11 @@ Item {
                 NumberAnimation { target: pinnedLyricText; property: "opacity"; to: 1; duration: 300 }
             }
             
-            // FULLY SOLID COLOR + 16px FONT FOR MAXIMUM BOLDNESS
             Text {
                 id: oldLyricText
                 anchors.centerIn: parent
                 width: Math.min(implicitWidth, 800 - 64)
+                text: pinnedLyricContainer.outgoingText
                 color: AppTheme.fg 
                 font.pixelSize: 16; font.bold: true; font.weight: 700; opacity: 1.0
                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
@@ -79,7 +90,7 @@ Item {
                 id: pinnedLyricText
                 anchors.centerIn: parent
                 width: Math.min(implicitWidth, 800 - 64)
-                text: pinnedLyricContainer.currentText
+                text: pinnedLyricContainer.displayedText
                 color: AppTheme.fg
                 font.pixelSize: 16; font.bold: true; font.weight: 700; opacity: 1.0
                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
@@ -125,7 +136,7 @@ Item {
                 }
                 Text { 
                     text: Backend.mediaArtist; 
-                    color: Qt.rgba(AppTheme.fg.r, AppTheme.fg.g, AppTheme.fg.b, 0.8) // High opacity subtext
+                    color: Qt.rgba(AppTheme.fg.r, AppTheme.fg.g, AppTheme.fg.b, 0.8) 
                     font.pixelSize: 13; font.bold: true; font.weight: 700; 
                     elide: Text.ElideRight; Layout.fillWidth: true 
                 }
@@ -179,7 +190,9 @@ Item {
                     cursorShape: Qt.PointingHandCursor; 
                     onClicked: {
                         Backend.setMediaPinned(!Backend.mediaPinned);
-                        if (Backend.mediaPinned) root.state = "sideInfo"; 
+                        if (Backend.mediaPinned) {
+                            Backend.isExpanded = false;
+                        }
                     }
                 }
             }

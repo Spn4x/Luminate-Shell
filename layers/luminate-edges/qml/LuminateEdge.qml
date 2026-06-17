@@ -93,7 +93,9 @@ Item {
                 return 290;
             }
             if (Backend.displayMode === "media") {
-                return Math.max(AppTheme.sideInfoMinWidth || 250, (mediaPillComponent ? mediaPillComponent.pinnedContentWidth : 0) + 64);
+                // THE FIX: Caps the maximum pill width at 800px so it doesn't break
+                let contentW = mediaPillComponent ? mediaPillComponent.pinnedContentWidth : 0;
+                return Math.min(800, Math.max(AppTheme.sideInfoMinWidth || 250, contentW + 64));
             }
             
             let dotSpace = Backend.displayMode === "privacy" ? 20 : 0;
@@ -222,12 +224,13 @@ Item {
                 return; 
             }
 
-            let localP = root.mapFromItem(null, x, 0); 
-            pulltabMenu.targetX = localP.x - (pulltabMenu.baseWidth / 2);
-            pulltabMenu.mode = "tray";
+            pulltabMenu.mode = "tray"; 
             pulltabMenu.activeBusName = busName;
             pulltabMenu.activeMenuPath = menuPath;
             pulltabMenu.menuTree = menuTree.children || [];
+            
+            let localP = root.mapFromItem(null, x, 0); 
+            pulltabMenu.targetX = localP.x - (pulltabMenu.baseWidth / 2);
             pulltabMenu.expanded = true;
             
             root.isPeeking = true; 
@@ -384,11 +387,12 @@ Item {
                     if (pulltabMenu.expanded && pulltabMenu.mode === "audio" && pulltabMenu.audioMenuType === type) {
                         pulltabMenu.expanded = false; 
                     } else {
-                        let p = targetItem.mapToItem(root, targetItem.width / 2, 0);
-                        pulltabMenu.targetX = p.x - (pulltabMenu.baseWidth / 2);
-                        pulltabMenu.mode = "audio";
+                        pulltabMenu.mode = "audio"; 
                         pulltabMenu.audioMenuType = type;
                         pulltabMenu.audioMenuItems = items;
+                        
+                        let p = targetItem.mapToItem(root, targetItem.width / 2, 0);
+                        pulltabMenu.targetX = p.x - (pulltabMenu.baseWidth / 2);
                         pulltabMenu.expanded = true;
                         
                         root.isPeeking = true;
@@ -400,9 +404,9 @@ Item {
                     if (pulltabMenu.expanded && pulltabMenu.mode === "settings") {
                         pulltabMenu.expanded = false;
                     } else {
+                        pulltabMenu.mode = "settings"; 
                         let p = btn.mapToItem(root, btn.width / 2, 0);
                         pulltabMenu.targetX = p.x - (pulltabMenu.baseWidth / 2);
-                        pulltabMenu.mode = "settings";
                         pulltabMenu.expanded = true;
                         
                         root.isPeeking = true;
@@ -414,9 +418,9 @@ Item {
                     if (pulltabMenu.expanded && pulltabMenu.mode === type) {
                         pulltabMenu.expanded = false;
                     } else {
+                        pulltabMenu.mode = type; 
                         let p = targetItem.mapToItem(root, targetItem.width / 2, 0);
                         pulltabMenu.targetX = p.x - (pulltabMenu.baseWidth / 2);
-                        pulltabMenu.mode = type;
                         pulltabMenu.expanded = true;
                         
                         root.isPeeking = true;
@@ -424,14 +428,12 @@ Item {
                     }
                 }
 
-                // THE FIX: Respond to the new Calendar module request
                 onCalendarRequested: (targetItem) => {
                     if (pulltabMenu.expanded && pulltabMenu.mode === "calendar") {
                         pulltabMenu.expanded = false;
                     } else {
-                        let p = targetItem.mapToItem(root, targetItem.width / 2, 0);
-                        pulltabMenu.targetX = p.x - (pulltabMenu.baseWidth / 2);
-                        pulltabMenu.mode = "calendar";
+                        pulltabMenu.mode = "calendar"; 
+                        pulltabMenu.targetX = (root.width / 2) - (pulltabMenu.baseWidth / 2);
                         pulltabMenu.expanded = true;
                         
                         root.isPeeking = true;

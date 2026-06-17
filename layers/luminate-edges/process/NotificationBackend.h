@@ -36,6 +36,10 @@ class NotificationBackend : public QObject, protected QDBusContext {
     Q_PROPERTY(bool hasActions READ hasActions NOTIFY notificationChanged)
     Q_PROPERTY(int pendingNotifications READ pendingNotifications NOTIFY queueChanged)
 
+    // --- NEW: NOTIFICATION HISTORY & DND ---
+    Q_PROPERTY(QVariantList notificationHistory READ notificationHistory NOTIFY notificationHistoryChanged)
+    Q_PROPERTY(bool dndMode READ dndMode NOTIFY dndModeChanged)
+
     Q_PROPERTY(QVariantList privacyApps READ privacyApps NOTIFY privacyChanged)
     Q_PROPERTY(QString privacySummary READ privacySummary NOTIFY privacyChanged)
     Q_PROPERTY(bool privacyHasMic READ privacyHasMic NOTIFY privacyChanged)
@@ -89,6 +93,9 @@ public:
     bool hasActions() const { return !m_current.actions.isEmpty(); }
     int pendingNotifications() const { return m_queue.size(); }
 
+    QVariantList notificationHistory() const { return m_notificationHistory; }
+    bool dndMode() const { return m_dndMode; }
+
     QVariantList privacyApps() const { return m_privacyApps; }
     QString privacySummary() const { return m_privacySummary; }
     bool privacyHasMic() const { return m_privacyHasMic; }
@@ -130,6 +137,13 @@ public:
     Q_INVOKABLE void invokeAction(const QString& actionId);
     Q_INVOKABLE void readyForNext();
     Q_INVOKABLE void closeNotification();
+
+    // --- NEW: NOTIFICATION HISTORY ---
+    Q_INVOKABLE void fetchNotificationHistory();
+    Q_INVOKABLE void clearNotificationHistory();
+    Q_INVOKABLE void removeNotificationHistory(int id);
+    Q_INVOKABLE void removeNotificationGroup(const QString& appName);
+    Q_INVOKABLE void toggleDndMode();
     
     Q_INVOKABLE void killPrivacyApp(uint pid, const QString& name);
     Q_INVOKABLE void ignorePrivacyApp(uint pid, const QString& name);
@@ -175,6 +189,10 @@ signals:
     void isExpandedChanged();
     void notificationChanged();
     void queueChanged();
+    
+    void notificationHistoryChanged();
+    void dndModeChanged();
+    
     void privacyChanged();
     void osdChanged();
     void mediaChanged();
@@ -215,6 +233,9 @@ private:
     
     QQueue<NotificationData> m_queue;
     NotificationData m_current;
+    
+    QVariantList m_notificationHistory;
+    bool m_dndMode = false;
     
     bool m_isShowingNotif = false;
     bool m_isShowingOsd = false;
@@ -270,6 +291,7 @@ private:
 private slots:
     void onSurfaceDeskPropsChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
     void onMediaManagerPropsChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
+    void onDndStateChanged(bool active);
     void fetchPosition();
     void fetchDuration();
 };

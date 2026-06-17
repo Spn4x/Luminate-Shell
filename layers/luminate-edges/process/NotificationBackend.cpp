@@ -6,6 +6,11 @@
 #include <QDBusVariant>
 #include <QDBusArgument>
 #include <QDBusMetaType>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QDateTime>
+#include <QTimeZone>
 #include <QDebug>
 #include <QDir>
 #include <QFile>
@@ -26,6 +31,17 @@ NotificationBackend::NotificationBackend(QObject *parent) : QObject(parent) {
     setupMediaManager();
     updateSystemInfo();
     
+    // --- SQLITE HISTORY SETUP ---
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "history_db");
+    db.setDatabaseName(QDir::homePath() + "/.local/share/luminate-shell/luminate_notifications.db");
+    if (db.open()) fetchNotificationHistory();
+
+    // --- DND DBUS SETUP ---
+    bus.connect("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "DNDStateChanged", this, SLOT(onDndStateChanged(bool)));
+    QDBusMessage dndMsg = QDBusMessage::createMethodCall("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "GetDNDState");
+    QDBusReply<bool> dndReply = bus.call(dndMsg);
+    if (dndReply.isValid()) m_dndMode = dndReply.value();
+
     connect(&m_positionTimer, &QTimer::timeout, this, &NotificationBackend::fetchPosition);
     m_positionTimer.start(1000);
 
@@ -78,6 +94,82 @@ NotificationBackend::NotificationBackend(QObject *parent) : QObject(parent) {
         }
         w->deleteLater();
     });
+}
+
+// --- NEW SMART GROUPED NOTIFICATION METHODS ---
+void NotificationBackend::fetchNotificationHistory() {
+    QVariantList history;
+    QSqlDatabase db = QSqlDatabase::database("history_db");
+    if (!db.isOpen()) return;
+    
+    QSqlQuery q(db);
+    q.exec("SELECT id, app_name, summary, body, icon, timestamp FROM history ORDER BY timestamp DESC LIMIT 50");
+    
+    QList<QString> appOrder;
+    QMap<QString, QVariantMap> appGroups;
+    
+    while (q.next()) {
+        QString appName = q.value(1).toString();
+        if (appName.isEmpty()) appName = "System";
+        
+        QVariantMap notif;
+        notif["id"] = q.value(0).toInt();
+        notif["summary"] = q.value(2).toString();
+        notif["body"] = q.value(3).toString();
+        
+        QString iconStr = q.value(4).toString();
+        notif["icon"] = iconStr;
+        
+        QString ts = q.value(5).toString();
+        QDateTime dt = QDateTime::fromString(ts, "yyyy-MM-dd HH:mm:ss");
+        dt.setTimeZone(QTimeZone::utc()); 
+        notif["time"] = dt.toLocalTime().toString("hh:mm AP");
+        
+        if (!appGroups.contains(appName)) {
+            appOrder.append(appName);
+            QVariantMap group;
+            group["appName"] = appName;
+            group["icon"] = iconStr;
+            group["latestTime"] = notif["time"];
+            group["notifications"] = QVariantList();
+            appGroups[appName] = group;
+        }
+        
+        QVariantMap group = appGroups[appName];
+        QVariantList list = group["notifications"].toList();
+        list.append(notif);
+        group["notifications"] = list;
+        group["count"] = list.size();
+        appGroups[appName] = group;
+    }
+    
+    for (const QString& appName : appOrder) {
+        history.append(appGroups[appName]);
+    }
+    
+    m_notificationHistory = history;
+    emit notificationHistoryChanged();
+}
+
+void NotificationBackend::clearNotificationHistory() {
+    QSqlDatabase db = QSqlDatabase::database("history_db");
+    if (db.isOpen()) {
+        QSqlQuery q(db);
+        q.exec("DELETE FROM history");
+        fetchNotificationHistory();
+    }
+}
+
+void NotificationBackend::onDndStateChanged(bool active) {
+    if (m_dndMode != active) {
+        m_dndMode = active;
+        emit dndModeChanged();
+    }
+}
+
+void NotificationBackend::toggleDndMode() {
+    QDBusMessage msg = QDBusMessage::createMethodCall("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "ToggleDND");
+    QDBusConnection::sessionBus().asyncCall(msg);
 }
 
 void NotificationBackend::onSurfaceDeskPropsChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated) {
@@ -195,6 +287,7 @@ void NotificationBackend::ShowNotification(uint id, const QString &icon, const Q
     }
 
     m_queue.enqueue(data);
+    fetchNotificationHistory(); 
     emit queueChanged();
     
     if (!m_isShowingNotif) processNext();
@@ -302,6 +395,7 @@ void NotificationBackend::UpdateMediaInfo(const QString &playerName, const QStri
     
     if (m_originalArtUrl != artUrl) {
         if (artUrl.isEmpty() && !trackChanged && !m_mediaArt.isEmpty()) {
+            // Keep art
         } else {
             m_originalArtUrl = artUrl;
             
@@ -762,6 +856,32 @@ void NotificationBackend::handlePolkitResolved(bool success) {
     Q_UNUSED(success);
     m_isShowingPolkit = false;
     updateDisplayMode();
+}
+
+void NotificationBackend::removeNotificationHistory(int id) {
+    QSqlDatabase db = QSqlDatabase::database("history_db");
+    if (db.isOpen()) {
+        QSqlQuery q(db);
+        q.prepare("DELETE FROM history WHERE id = ?");
+        q.addBindValue(id);
+        q.exec();
+        fetchNotificationHistory(); // Instantly updates the UI
+    }
+}
+
+void NotificationBackend::removeNotificationGroup(const QString& appName) {
+    QSqlDatabase db = QSqlDatabase::database("history_db");
+    if (db.isOpen()) {
+        QSqlQuery q(db);
+        if (appName == "System") {
+            q.exec("DELETE FROM history WHERE app_name = '' OR app_name IS NULL OR app_name = 'System'");
+        } else {
+            q.prepare("DELETE FROM history WHERE app_name = ?");
+            q.addBindValue(appName);
+            q.exec();
+        }
+        fetchNotificationHistory(); // Instantly updates the UI
+    }
 }
 
 void NotificationBackend::updateDisplayMode() {
