@@ -35,7 +35,7 @@ void createWallpaperWindow(QScreen* screen) {
 
     auto* layerWindow = LayerShellQt::Window::get(view);
     if (layerWindow) {
-        layerWindow->setLayer(LayerShellQt::Window::LayerBottom);
+        layerWindow->setLayer(LayerShellQt::Window::LayerBackground);
         layerWindow->setScope(QStringLiteral("wallpaper"));
         layerWindow->setExclusiveZone(-1);
         
