@@ -11,7 +11,6 @@ Item {
     property bool isPinned: false
     property bool isPeeking: false
     property bool isIdle: false 
-    property bool isSequencing: false
     
     property string requestedTrayBusName: ""
 
@@ -56,7 +55,7 @@ Item {
             return "pill";
         }
         
-        if (isPeeking || pulltabMenu.expanded || root.isSequencing || Backend.displayMode === "system") {
+        if (isPeeking || pulltabMenu.expanded || Backend.displayMode === "system") {
             return "statusbar";
         }
         
@@ -74,7 +73,6 @@ Item {
         
         if (activeState !== "statusbar") {
             pulltabMenu.expanded = false;
-            root.isSequencing = false;
         }
     }
 
@@ -122,7 +120,7 @@ Item {
         
         if (activeState === "statusbar") {
             let baseW = statusBar.implicitWidth;
-            if (pulltabMenu.expanded || root.isSequencing) {
+            if (pulltabMenu.expanded) {
                 if (pulltabMenu.mode === "calendar" || pulltabMenu.mode === "notification" || pulltabMenu.mode === "privacy" || pulltabMenu.mode === "media") {
                     if (pulltabMenu.baseWidth > baseW) {
                         return pulltabMenu.baseWidth;
@@ -233,53 +231,29 @@ Item {
         }
     }
 
-    function openMenuSequence(mode, targetX, busName, menuPath, menuTree) {
+    function openMenu(mode, targetItem) {
         if (pulltabMenu.expanded) {
-            pulltabMenu.mode = mode;
-            if (busName !== undefined) {
-                pulltabMenu.activeBusName = busName;
+            if (pulltabMenu.mode === mode) {
+                pulltabMenu.expanded = false;
+                root.requestedTrayBusName = "";
+                return;
             }
-            if (menuPath !== undefined) {
-                pulltabMenu.activeMenuPath = menuPath;
-            }
-            if (menuTree !== undefined) {
-                pulltabMenu.menuTree = menuTree;
-            }
-            if (targetX !== undefined) {
-                pulltabMenu.targetX = targetX;
-            }
-            return;
         }
 
         pulltabMenu.mode = mode;
-        if (busName !== undefined) {
-            pulltabMenu.activeBusName = busName;
-        }
-        if (menuPath !== undefined) {
-            pulltabMenu.activeMenuPath = menuPath;
-        }
-        if (menuTree !== undefined) {
-            pulltabMenu.menuTree = menuTree;
-        }
-        if (targetX !== undefined) {
-            pulltabMenu.targetX = targetX;
+        
+        if (mode === "calendar" || mode === "notification" || mode === "privacy" || mode === "media") {
+            // Target X is mathematically bypassed by anchors, but we reset it cleanly
+            pulltabMenu.targetX = 0;
+        } else if (targetItem !== null && targetItem !== undefined) {
+            let p = targetItem.mapToItem(root, targetItem.width / 2, 0);
+            pulltabMenu.targetX = p.x - (pulltabMenu.baseWidth / 2);
         }
 
+        pulltabMenu.expanded = true;
+        
         root.isPeeking = true;
         root.startTimer();
-
-        root.isSequencing = true;
-        sequenceTimer.start();
-    }
-
-    Timer {
-        id: sequenceTimer
-        interval: 300 
-        
-        onTriggered: {
-            root.isSequencing = false;
-            pulltabMenu.expanded = true;
-        }
     }
 
     PulltabMenu {
@@ -288,18 +262,12 @@ Item {
         z: -1
         anchors.bottom: barBg.top 
         
+        // Dynamically anchors wide menus to the exact center of the screen, bypassing targetX animations
         anchors.horizontalCenter: {
             if (mode === "calendar" || mode === "notification" || mode === "privacy" || mode === "media") {
                 return root.horizontalCenter;
             }
             return undefined;
-        }
-        
-        x: {
-            if (mode === "calendar" || mode === "notification" || mode === "privacy" || mode === "media") {
-                return 0; 
-            }
-            return Math.max(16, Math.min(targetX, root.width - width - 16));
         }
         
         onExpandedChanged: {
@@ -328,7 +296,7 @@ Item {
         color: AppTheme.bg
         
         visible: {
-            if ((pulltabMenu.expanded || root.isSequencing) && activeState === "statusbar") {
+            if (pulltabMenu.height > 0 && activeState === "statusbar") {
                 return true;
             }
             return false;
@@ -398,10 +366,19 @@ Item {
                 return;
             } 
 
-            let localP = root.mapFromItem(null, x, 0); 
-            let targetX = localP.x - (pulltabMenu.baseWidth / 2);
+            pulltabMenu.mode = "tray"; 
             
-            root.openMenuSequence("tray", targetX, busName, menuPath, menuTree.children || []);
+            let localP = root.mapFromItem(null, x, 0); 
+            pulltabMenu.targetX = localP.x - (pulltabMenu.baseWidth / 2);
+            
+            pulltabMenu.activeBusName = busName;
+            pulltabMenu.activeMenuPath = menuPath;
+            pulltabMenu.menuTree = menuTree.children || [];
+            
+            pulltabMenu.expanded = true;
+            
+            root.isPeeking = true; 
+            root.startTimer();
         }
     }
 
@@ -448,7 +425,7 @@ Item {
         }
         
         property int topRadius: {
-            if ((pulltabMenu.expanded || root.isSequencing) && activeState === "statusbar") {
+            if (pulltabMenu.height > 0 && activeState === "statusbar") {
                 if (pulltabMenu.baseWidth >= statusBar.implicitWidth) {
                     return 0;
                 }
@@ -701,27 +678,21 @@ Item {
                 }
 
                 onAudioMenuRequested: (type, targetItem, items) => {
-                    let p = targetItem.mapToItem(root, targetItem.width / 2, 0);
-                    let targetX = p.x - (pulltabMenu.baseWidth / 2);
-                    root.openMenuSequence("audio", targetX, undefined, undefined, items);
                     pulltabMenu.audioMenuType = type;
                     pulltabMenu.audioMenuItems = items;
+                    root.openMenu("audio", targetItem);
                 }
 
                 onSettingsClicked: (btn) => { 
-                    let p = btn.mapToItem(root, btn.width / 2, 0);
-                    let targetX = p.x - (pulltabMenu.baseWidth / 2);
-                    root.openMenuSequence("settings", targetX);
+                    root.openMenu("settings", btn);
                 }
                 
                 onIndicatorClicked: (type, targetItem) => {
-                    let p = targetItem.mapToItem(root, targetItem.width / 2, 0);
-                    let targetX = p.x - (pulltabMenu.baseWidth / 2);
-                    root.openMenuSequence(type, targetX);
+                    root.openMenu(type, targetItem);
                 }
 
                 onCalendarRequested: (targetItem) => {
-                    root.openMenuSequence("calendar", 0);
+                    root.openMenu("calendar", null);
                 }
             }
 
@@ -1043,7 +1014,7 @@ Item {
             return;
         }
         
-        if (pulltabMenu.expanded || root.isSequencing) {
+        if (pulltabMenu.expanded) {
             return; 
         }
         
@@ -1070,7 +1041,6 @@ Item {
         onTriggered: {
             root.isPeeking = false;
             pulltabMenu.expanded = false;
-            root.isSequencing = false;
             
             if (Backend.displayMode === "screenshot_info") {
                 Backend.cancelScreenshot();
@@ -1090,7 +1060,6 @@ Item {
         function onRequestHide() { 
             autoDismissTimer.stop(); 
             pulltabMenu.expanded = false; 
-            root.isSequencing = false;
             root.isPeeking = false; 
         }
         
