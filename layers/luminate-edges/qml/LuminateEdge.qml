@@ -10,6 +10,7 @@ Item {
     
     property bool isPinned: false
     property bool isPeeking: false
+    property bool isIdle: false // Tracks if 10s have passed without interaction
     
     property string requestedTrayBusName: ""
 
@@ -53,12 +54,26 @@ Item {
     }
 
     onActiveStateChanged: {
+        // Reset idle state immediately if we leave the passive visual mode
+        if (activeState !== "passive") {
+            root.isIdle = false;
+        }
+
         if (activeState === "pill" || activeState === "expanded" || activeState === "statusbar") {
             root.startTimer();
         }
         if (activeState !== "statusbar") {
             pulltabMenu.expanded = false;
         }
+    }
+
+    // NEW: Smart Idle Timer to handle 10s opacity logic
+    Timer {
+        id: idleTimer
+        interval: 10000
+        // Automatically runs ONLY when passive and the mouse isn't hovering over it
+        running: root.activeState === "passive" && !edgeHover.hovered
+        onTriggered: root.isIdle = true
     }
 
     property int baseHeight: activeState === "passive" ? (AppTheme.passiveHeight || 13) : (AppTheme.sideInfoHeight || 36)
@@ -93,7 +108,7 @@ Item {
                 return 290;
             }
             if (Backend.displayMode === "media") {
-                // THE FIX: Caps the maximum pill width at 800px so it doesn't break
+                // Caps the maximum pill width at 800px so it doesn't break
                 let contentW = mediaPillComponent ? mediaPillComponent.pinnedContentWidth : 0;
                 return Math.min(800, Math.max(AppTheme.sideInfoMinWidth || 250, contentW + 64));
             }
@@ -245,6 +260,22 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         width: totalWidth
         height: totalHeight
+        
+        // Dynamic smart opacity: Will drop to 0.3 (70% transparency) after 10s of being passive and unhovered
+        opacity: root.isIdle && root.activeState === "passive" ? 0.3 : 1.0
+        Behavior on opacity { 
+            NumberAnimation { duration: 400; easing.type: Easing.OutCubic } 
+        }
+
+        // Lightweight watcher. Bypasses blocking mouse input events, while capturing pure physical movement
+        HoverHandler {
+            id: edgeHover
+            onHoveredChanged: {
+                if (hovered) {
+                    root.isIdle = false; // Immediately revert to full opacity on mouse over
+                }
+            }
+        }
         
         property int currentRadius: activeState === "expanded" ? AppTheme.expandedRadius : (activeState === "passive" ? AppTheme.passiveRadius : AppTheme.sideInfoRadius)
         
